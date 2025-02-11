@@ -14,7 +14,14 @@ import heapq
 # json, math, itertools, collections, functools, random, heapq, etc.
 
 ########################################################################
-
+def find_simplicial_vertex(adjacency_list, cliques):
+    for vertex in range(len(adjacency_list)):
+        if len(adjacency_list[vertex]) > 1:
+            neighbors = adjacency_list[vertex]
+            for i in range(len(neighbors)):
+                for j in range(i+1, len(neighbors)):
+                    if neighbors[i] not in adjacency_list[neighbors[j]]:
+                        return vertex, neighbors[i], neighbors[j]
 
 
 
@@ -39,7 +46,8 @@ class Inference:
         self.kval_in_top_k = data["k value (in top k)"]
         self.num_potentials = data["Potentials_Count"]
         self.cliques = [(clique["cliques"], clique["potentials"]) for clique in data["Cliques and Potential"]]
-        self.adjacency_list = [[]]*self.num_variables
+        self.adjacency_list = [[] for _ in range(self.num_variables)]
+
         for clique in self.cliques:
             for vertex in clique[0]:
                 self.adjacency_list[vertex] = list(set(self.adjacency_list[vertex] + clique[0]))
@@ -65,8 +73,32 @@ class Inference:
 
         Refer to the problem statement for details on triangulation and clique extraction.
         """
+        max_cliques = set()
+        nodes = set(range(self.num_variables))
         
+        while nodes:
+            min_fill_node = None
+            min_degree = float('inf')
+            for n in nodes:
+                degree = len(self.adjacency_list[n])
+                if degree < min_degree:
+                    min_degree = degree
+                    min_fill_node = n
+
+            neighbors = list(self.adjacency_list[min_fill_node])
+            for u, v in itertools.combinations(neighbors, 2):
+                if v not in self.adjacency_list[u]:
+                    self.adjacency_list[u].append(v)
+                    self.adjacency_list[v].append(u)
+            
+            clique = tuple(sorted([min_fill_node] + neighbors))
+            max_cliques.add(clique)
+            nodes.remove(min_fill_node)
+            self.adjacency_list[min_fill_node] = []
         
+        self.maximal_cliques = list(max_cliques)
+                
+                    
         
     def get_junction_tree(self):
         """
