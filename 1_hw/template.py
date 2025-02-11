@@ -35,7 +35,18 @@ class Inference:
         
         Refer to the sample test case for the structure of the input data.
         """
-        pass
+        self.test_case_no = data["TestCaseNumber"]
+        self.num_variables = data["VariablesCount"]
+        self.kval_in_top_k = data["k value (in top k)"]
+        self.num_potentials = data["Potentials_Count"]
+        self.cliques = [(clique["cliques"], clique["potentials"]) for clique in data["Cliques and Potential"]]
+        # self.cliques[0] --> the clique vertices, self.cliques[1] --> the potentials
+        self.triangulated_graph = None
+        self.maximal_cliques = None
+        self.junction_tree = None
+        self.jt_potentials = None
+        self.Z_value = None
+        self.marginals = None
 
     def triangulate_and_get_cliques(self):
         """
