@@ -35,11 +35,16 @@ class Inference:
         
         Refer to the sample test case for the structure of the input data.
         """
-        self.test_case_no = data["TestCaseNumber"]
         self.num_variables = data["VariablesCount"]
         self.kval_in_top_k = data["k value (in top k)"]
         self.num_potentials = data["Potentials_Count"]
         self.cliques = [(clique["cliques"], clique["potentials"]) for clique in data["Cliques and Potential"]]
+        self.adjacency_list = [[]]*self.num_variables
+        for clique in self.cliques:
+            for vertex in clique[0]:
+                self.adjacency_list[vertex] = list(set(self.adjacency_list[vertex] + clique[0]))
+                self.adjacency_list[vertex].remove(vertex)
+        
         # self.cliques[0] --> the clique vertices, self.cliques[1] --> the potentials
         self.triangulated_graph = None
         self.maximal_cliques = None
@@ -60,8 +65,9 @@ class Inference:
 
         Refer to the problem statement for details on triangulation and clique extraction.
         """
-        pass
-
+        
+        
+        
     def get_junction_tree(self):
         """
         Construct the junction tree from the maximal cliques.
