@@ -112,7 +112,12 @@ class Inference:
 
         Refer to the problem statement for details on junction tree construction.
         """
-        pass
+        self.adjacent_tree = [[] for _ in range(len(self.maximal_cliques))]
+        for i in range(len(self.maximal_cliques)):
+            for j in range(i+1, len(self.maximal_cliques)):
+                if len(set(self.maximal_cliques[i]) & set(self.maximal_cliques[j])) > 0:
+                    self.adjacent_tree[i].append(j)
+                    self.adjacent_tree[j].append(i)
 
     def assign_potentials_to_cliques(self):
         """
@@ -125,7 +130,22 @@ class Inference:
         
         Refer to the sample test case for how potentials are associated with cliques.
         """
-        pass
+        self.jt_potentials = []
+        for maximal_clique in self.maximal_cliques:
+            appropriate_cliques = []
+            for clique, potential in self.cliques:
+                if set(clique).issubset(set(maximal_clique)):
+                    appropriate_cliques.append((clique, potential))
+            maximal_potential = [1] * 2 ** len(maximal_clique)
+            for i in range(2 ** len(maximal_clique)):
+                for clique, potential in appropriate_cliques:
+                    clique_index = 0
+                    for j in range(len(clique)):
+                        clique_index *= 2
+                        clique_index += ((i >> clique[j]) & 1)
+                    maximal_potential[i] *= potential[clique_index]
+            self.jt_potentials.append((maximal_clique, maximal_potential))
+
 
     def get_z_value(self):
         """
