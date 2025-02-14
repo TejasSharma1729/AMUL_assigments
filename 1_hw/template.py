@@ -60,6 +60,7 @@ class Inference:
         self.jt_potentials = None
         self.Z_value = None
         self.marginals = None
+        return
 
     def triangulate_and_get_cliques(self):
         """
@@ -97,8 +98,8 @@ class Inference:
             self.adjacency_list[min_fill_node] = []
         
         self.maximal_cliques = list(max_cliques)
-                
-                    
+        return self.maximal_cliques
+        
         
     def get_junction_tree(self):
         """
@@ -112,12 +113,42 @@ class Inference:
 
         Refer to the problem statement for details on junction tree construction.
         """
-        self.adjacent_tree = [[] for _ in range(len(self.maximal_cliques))]
+        self.junction_tree = [[] for _ in range(len(self.maximal_cliques))]
+        junction_edges = []
         for i in range(len(self.maximal_cliques)):
             for j in range(i+1, len(self.maximal_cliques)):
-                if len(set(self.maximal_cliques[i]) & set(self.maximal_cliques[j])) > 0:
-                    self.adjacent_tree[i].append(j)
-                    self.adjacent_tree[j].append(i)
+                intersection = set(self.maximal_cliques[i]) & set(self.maximal_cliques[j])
+                if len(intersection) > 0:
+                    junction_edges.append((i, j, len(intersection)))
+        
+        # Kruskal's algorithm
+        sorted_edges = sorted(junction_edges, key = lambda x: x[2])
+        parent = [i for i in range(len(self.maximal_cliques))]
+        rank = [0] * len(self.maximal_cliques)
+        for i, j, _ in sorted_edges:
+            k, l = i, j
+            while parent[k] != k:
+                k = parent[k]
+            while parent[l] != l:
+                l = parent[l]
+            if k == l:
+                parent[i] = l
+                parent[j] = l
+                continue
+            if rank[k] < rank[l]:
+                parent[i] = l
+                parent[j] = l
+                parent[k] = l
+            elif rank[k] > rank[l]:
+                parent[i] = k
+                parent[j] = k
+                parent[l] = k
+            self.junction_tree[i].append(j)
+            self.junction_tree[j].append(i)
+        
+        # TODO: Verify RIP property
+
+        return self.junction_tree
 
     def assign_potentials_to_cliques(self):
         """
@@ -145,6 +176,7 @@ class Inference:
                         clique_index += ((i >> clique[j]) & 1)
                     maximal_potential[i] *= potential[clique_index]
             self.jt_potentials.append((maximal_clique, maximal_potential))
+        return self.jt_potentials
 
 
     def get_z_value(self):
@@ -158,7 +190,30 @@ class Inference:
         
         Refer to the problem statement for details on computing the partition function.
         """
-        pass
+        ordering = list(range(self.num_variables))
+        all_factors = set(self.jt_potentials)
+        for i in ordering:
+            factors = []
+            variables = set()
+            for factor in all_factors:
+                if i in factor[0]:
+                    factors.append(factor)
+                    variables = variables.union(set(factor[0]))
+            variables.remove(i)
+            product_wo_i = [1] * 2 ** (len(variables))
+            for j in range(2 ** (len(variables))):
+                for factor in factors:
+                    factor_index = 0
+                    for k in range(len(factor[0])):
+                        if factor[0][k] != i:
+                            factor_index *= 2
+                            factor_index += ((j >> factor[0][k]) & 1)
+                    product_wo_i[j] *= factor[1][factor_index]
+            all_factors = all_factors - set(factors)
+            all_factors.add((tuple(variables), product_wo_i))
+        self.Z_value = sum(list(all_factors)[0][1])
+        return self.Z_value
+
 
     def compute_marginals(self):
         """
@@ -172,6 +227,7 @@ class Inference:
         Refer to the sample test case for the expected format of the marginals.
         """
         pass
+
 
     def compute_top_k(self):
         """
