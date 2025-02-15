@@ -190,7 +190,7 @@ class Inference:
         
         Refer to the problem statement for details on computing the partition function.
         """
-        ordering = list(range(self.num_variables))
+        ordering = list(range(self.num_variables)) # TODO: Implement ordering
         all_factors = set(self.jt_potentials)
         for i in ordering:
             factors = []
@@ -226,7 +226,36 @@ class Inference:
         
         Refer to the sample test case for the expected format of the marginals.
         """
-        pass
+        ordering = list(range(self.num_variables)) # TODO: Implement ordering
+        self.marginals = [[1, 1] for _ in range(self.num_variables)]
+        for i in range (len(self.num_variables)):
+            all_factors = set(self.jt_potentials)
+            for j in range(self.num_variables):
+                if j == i:
+                    continue
+                factors = []
+                variables = set()
+                for factor in all_factors:
+                    if j in factor[0]:
+                        factors.append(factor)
+                        variables = variables.union(set(factor[0]))
+                variables.remove(j)
+                product_wo_j = [1] * 2 ** (len(variables))
+                for k in range(2 ** (len(variables))):
+                    for factor in factors:
+                        factor_index = 0
+                        for l in range(len(factor[0])):
+                            if factor[0][l] != j:
+                                factor_index *= 2
+                                factor_index += ((k >> factor[0][l]) & 1)
+                        product_wo_j[k] *= factor[1][factor_index]
+                all_factors = all_factors - set(factors)
+                all_factors.add((tuple(variables), product_wo_j))
+            self.marginals[i] = [sum(list(all_factors)[0][1][::2]), sum(list(all_factors)[0][1][1::2])]
+        for i in range(self.num_variables):
+            self.marginals[i][0] /= self.Z_value
+            self.marginals[i][1] /= self.Z_value
+        return self.marginals
 
 
     def compute_top_k(self):
