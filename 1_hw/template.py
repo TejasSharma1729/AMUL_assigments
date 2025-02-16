@@ -44,8 +44,8 @@ class Inference:
         """
         self.num_variables = data["VariablesCount"]
         self.kval_in_top_k = data["k value (in top k)"]
-        self.num_potentials = data["Potentials_Count"]
-        self.cliques = [(clique["cliques"], clique["potentials"]) for clique in data["Cliques and Potential"]]
+        self.num_potentials = data["Potentials_count"]
+        self.cliques = [(clique["cliques"], clique["potentials"]) for clique in data["Cliques and Potentials"]]
         self.adjacency_list = [[] for _ in range(self.num_variables)]
 
         for clique in self.cliques:
