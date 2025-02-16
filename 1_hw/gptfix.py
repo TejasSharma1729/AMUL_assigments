@@ -14,7 +14,7 @@ import heapq
 # json, math, itertools, collections, functools, random, heapq, etc.
 
 ########################################################################
-def find_simplicial_vertex(adjacency_list):
+def find_simplicial_vertex(adjacency_list, cliques):
     for vertex in range(len(adjacency_list)):
         if len(adjacency_list[vertex]) > 1:
             neighbors = adjacency_list[vertex]
@@ -55,7 +55,6 @@ class Inference:
         
         # self.cliques[0] --> the clique vertices, self.cliques[1] --> the potentials
         self.triangulated_graph = None
-        self.optimal_ordering = None
         self.maximal_cliques = None
         self.junction_tree = None
         self.jt_potentials = None
@@ -75,33 +74,33 @@ class Inference:
 
         Refer to the problem statement for details on triangulation and clique extraction.
         """
+      
         max_cliques = set()
         nodes = set(range(self.num_variables))
-        self.optimal_ordering = []
-                
-        while nodes:
-            min_fill_node = None
-            min_degree = float('inf')
-            for n in nodes:
-                degree = len(self.adjacency_list[n])
-                if degree < min_degree:
-                    min_degree = degree
-                    min_fill_node = n
+        adjacency = {i: set(self.adjacency_list[i]) for i in range(self.num_variables)}
 
-            neighbors = list(self.adjacency_list[min_fill_node])
+        while nodes:
+            # Find node with minimum fill-in (min-degree heuristic as an approximation)
+            min_fill_node = min(nodes, key=lambda n: len(adjacency[n]))
+
+            # Identify its neighbors and create edges between them to form a clique
+            neighbors = list(adjacency[min_fill_node])
             for u, v in itertools.combinations(neighbors, 2):
-                if v not in self.adjacency_list[u]:
-                    self.adjacency_list[u].append(v)
-                    self.adjacency_list[v].append(u)
-            
+                adjacency[u].add(v)
+                adjacency[v].add(u)
+
+            # Create a maximal clique
             clique = tuple(sorted([min_fill_node] + neighbors))
             max_cliques.add(clique)
+
+            # Remove the node
             nodes.remove(min_fill_node)
-            self.adjacency_list[min_fill_node] = []
-        
+            for neighbor in adjacency[min_fill_node]:
+                adjacency[neighbor].remove(min_fill_node)
+
+            adjacency.pop(min_fill_node, None)  # Delete node from adjacency list
+
         self.maximal_cliques = list(max_cliques)
-        
-        
         return self.maximal_cliques
         
         
@@ -117,42 +116,44 @@ class Inference:
 
         Refer to the problem statement for details on junction tree construction.
         """
-        self.junction_tree = [[] for _ in range(len(self.maximal_cliques))]
-        junction_edges = []
-        for i in range(len(self.maximal_cliques)):
-            for j in range(i+1, len(self.maximal_cliques)):
-                intersection = set(self.maximal_cliques[i]) & set(self.maximal_cliques[j])
-                if len(intersection) > 0:
-                    junction_edges.append((i, j, len(intersection)))
-        
-        # Kruskal's algorithm
-        sorted_edges = sorted(junction_edges, key = lambda x: x[2])
-        parent = [i for i in range(len(self.maximal_cliques))]
-        rank = [0] * len(self.maximal_cliques)
-        for i, j, _ in sorted_edges:
-            k, l = i, j
-            while parent[k] != k:
-                k = parent[k]
-            while parent[l] != l:
-                l = parent[l]
-            if k == l:
-                parent[i] = l
-                parent[j] = l
-                continue
-            if rank[k] < rank[l]:
-                parent[i] = l
-                parent[j] = l
-                parent[k] = l
-            elif rank[k] > rank[l]:
-                parent[i] = k
-                parent[j] = k
-                parent[l] = k
-            self.junction_tree[i].append(j)
-            self.junction_tree[j].append(i)
-        
-        # TODO: Verify RIP property
+        if not self.maximal_cliques:
+            raise ValueError("Maximal cliques not computed. Run triangulation first.")
+
+        clique_graph = []
+        num_cliques = len(self.maximal_cliques)
+
+        # Create edges based on separator sizes
+        for i, j in itertools.combinations(range(num_cliques), 2):
+            intersection = set(self.maximal_cliques[i]) & set(self.maximal_cliques[j])
+            if intersection:
+                clique_graph.append((len(intersection), i, j))  # (weight, clique1, clique2)
+
+        # Sort edges by separator size (descending) for MWST
+        clique_graph.sort(reverse=True, key=lambda x: x[0])
+
+        # Kruskal’s algorithm for MWST
+        parent = list(range(num_cliques))
+        self.junction_tree = [[] for _ in range(num_cliques)]
+
+        def find(v):
+            while parent[v] != v:
+                v = parent[v]
+            return v
+
+        def union(v1, v2):
+            root1 = find(v1)
+            root2 = find(v2)
+            if root1 != root2:
+                parent[root2] = root1
+
+        for weight, i, j in clique_graph:
+            if find(i) != find(j):
+                union(i, j)
+                self.junction_tree[i].append(j)
+                self.junction_tree[j].append(i)
 
         return self.junction_tree
+
 
     def assign_potentials_to_cliques(self):
         """
@@ -167,21 +168,26 @@ class Inference:
         """
         self.jt_potentials = []
         for maximal_clique in self.maximal_cliques:
-            appropriate_cliques = []
+            relevant_potentials = []
             for clique, potential in self.cliques:
-                if set(clique).issubset(set(maximal_clique)):
-                    appropriate_cliques.append((clique, potential))
-            maximal_potential = [1] * 2 ** len(maximal_clique)
-            for i in range(2 ** len(maximal_clique)):
-                for clique, potential in appropriate_cliques:
-                    clique_index = 0
-                    for j in range(len(clique)):
-                        clique_index *= 2
-                        clique_index += ((i >> clique[j]) & 1)
-                    maximal_potential[i] *= potential[clique_index]
-            self.jt_potentials.append((maximal_clique, maximal_potential))
-        return self.jt_potentials
+                if set(clique).issubset(set(maximal_clique)):  # Subset check
+                    relevant_potentials.append((clique, potential))
 
+            # Combine all relevant potentials
+            clique_size = len(maximal_clique)
+            full_potential = [1] * (2 ** clique_size)
+
+            for idx in range(2 ** clique_size):
+                for clique, potential in relevant_potentials:
+                    clique_idx = 0
+                    for i, v in enumerate(clique):
+                        clique_idx = (clique_idx << 1) | ((idx >> v) & 1)
+                    full_potential[idx] *= potential[clique_idx]
+
+            self.jt_potentials.append((maximal_clique, full_potential))
+
+        return self.jt_potentials
+    
 
     def get_z_value(self):
         """
@@ -194,30 +200,13 @@ class Inference:
         
         Refer to the problem statement for details on computing the partition function.
         """
-        ordering = list(range(self.num_variables)) # TODO: Implement ordering
-        all_factors = set([(tuple(a), tuple(b)) for (a,b) in self.jt_potentials])
-        for i in ordering:
-            factors = []
-            variables = set()
-            for factor in all_factors:
-                if i in factor[0]:
-                    factors.append(factor)
-                    variables = variables.union(set(factor[0]))
-            variables.remove(i)
-            product_wo_i = [1] * 2 ** (len(variables))
-            for j in range(2 ** (len(variables))):
-                for factor in factors:
-                    factor_index = 0
-                    for k in range(len(factor[0])):
-                        if factor[0][k] != i:
-                            factor_index *= 2
-                            factor_index += ((j >> factor[0][k]) & 1)
-                    product_wo_i[j] *= factor[1][factor_index]
-            all_factors = all_factors - set(factors)
-            all_factors.add((tuple(variables), tuple(product_wo_i)))
-        self.Z_value = sum(list(all_factors)[0][1])
-        return self.Z_value
+        messages = {}  # Store messages
+        for clique, potential in self.jt_potentials:
+            messages[tuple(clique)] = sum(potential)
 
+        self.Z_value = sum(messages.values())
+        return self.Z_value
+    
 
     def compute_marginals(self):
         """
@@ -230,35 +219,18 @@ class Inference:
         
         Refer to the sample test case for the expected format of the marginals.
         """
-        ordering = list(range(self.num_variables)) # TODO: Implement ordering
-        self.marginals = [[1, 1] for _ in range(self.num_variables)]
-        for i in range (self.num_variables):
-            all_factors = set([(tuple(a), tuple(b)) for (a,b) in self.jt_potentials])
-            for j in range(self.num_variables):
-                if j == i:
-                    continue
-                factors = []
-                variables = set()
-                for factor in all_factors:
-                    if j in factor[0]:
-                        factors.append(factor)
-                        variables = variables.union(set(factor[0]))
-                variables.remove(j)
-                product_wo_j = [1] * 2 ** (len(variables))
-                for k in range(2 ** (len(variables))):
-                    for factor in factors:
-                        factor_index = 0
-                        for l in range(len(factor[0])):
-                            if factor[0][l] != j:
-                                factor_index *= 2
-                                factor_index += ((k >> factor[0][l]) & 1)
-                        product_wo_j[k] *= factor[1][factor_index]
-                all_factors = all_factors - set(factors)
-                all_factors.add((tuple(variables), tuple(product_wo_j)))
-            self.marginals[i] = [sum(list(all_factors)[0][1][::2]), sum(list(all_factors)[0][1][1::2])]
-        for i in range(self.num_variables):
-            self.marginals[i][0] /= self.Z_value
-            self.marginals[i][1] /= self.Z_value
+        self.marginals = [[0, 0] for _ in range(self.num_variables)]
+        
+        for var in range(self.num_variables):
+            marginal_sum = [0, 0]
+            for clique, potential in self.jt_potentials:
+                if var in clique:
+                    for idx, val in enumerate(potential):
+                        state = (idx >> var) & 1  # Get bit for var
+                        marginal_sum[state] += val
+            self.marginals[var][0] = marginal_sum[0] / self.Z_value
+            self.marginals[var][1] = marginal_sum[1] / self.Z_value
+
         return self.marginals
 
 
