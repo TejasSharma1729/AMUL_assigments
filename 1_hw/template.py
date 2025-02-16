@@ -14,14 +14,22 @@ import heapq
 # json, math, itertools, collections, functools, random, heapq, etc.
 
 ########################################################################
-def find_simplicial_vertex(adjacency_list):
-    for vertex in range(len(adjacency_list)):
-        if len(adjacency_list[vertex]) > 1:
-            neighbors = adjacency_list[vertex]
+
+def find_simplicial_vertices(adjacency_list):
+    simplicial_vertices = []
+    for (vertex, neighbors) in adjacency_list.items():
+        flag = True
+        if len(neighbors) > 1:
             for i in range(len(neighbors)):
+                if not flag:
+                    break
                 for j in range(i+1, len(neighbors)):
                     if neighbors[i] not in adjacency_list[neighbors[j]]:
-                        return vertex, neighbors[i], neighbors[j]
+                        flag = False
+                        break
+        if flag:
+            simplicial_vertices.append(vertex)
+    return simplicial_vertices
 
 
 
@@ -75,33 +83,53 @@ class Inference:
 
         Refer to the problem statement for details on triangulation and clique extraction.
         """
-        max_cliques = set()
         nodes = set(range(self.num_variables))
         self.optimal_ordering = []
-                
-        while nodes:
-            min_fill_node = None
-            min_degree = float('inf')
-            for n in nodes:
-                degree = len(self.adjacency_list[n])
-                if degree < min_degree:
-                    min_degree = degree
-                    min_fill_node = n
+        # adj_list = [list(set(neighbors)) for neighbors in self.adjacency_list]
+        adj_list = {i: list(set(neighbors)) for i, neighbors in enumerate(self.adjacency_list)}
+        self.maximal_cliques = []
 
-            neighbors = list(self.adjacency_list[min_fill_node])
-            for u, v in itertools.combinations(neighbors, 2):
-                if v not in self.adjacency_list[u]:
-                    self.adjacency_list[u].append(v)
-                    self.adjacency_list[v].append(u)
-            
-            clique = tuple(sorted([min_fill_node] + neighbors))
-            max_cliques.add(clique)
-            nodes.remove(min_fill_node)
-            self.adjacency_list[min_fill_node] = []
-        
-        self.maximal_cliques = list(max_cliques)
-        
-        
+        while adj_list != {}:
+            for vertex in adj_list.keys():
+                if len(adj_list[vertex]) == 0:
+                    self.optimal_ordering.append(vertex)
+                    adj_list.pop(vertex)
+
+            simplicial_vertices = find_simplicial_vertices(adj_list)
+            if len(simplicial_vertices) > 0:
+                self.optimal_ordering.extend(simplicial_vertices)
+                for vertex in simplicial_vertices:
+                    for neighbor in adj_list[vertex]:
+                        adj_list[neighbor].remove(vertex)
+                    self.maximal_cliques.append(set([vertex] + adj_list[vertex]))
+                    adj_list.pop(vertex)
+
+            else:
+                min_degree_vertex = -1
+                for (vertex, neighbors) in adj_list.items():
+                    if len(neighbors) > 0:
+                        if min_degree_vertex == -1 or len(adj_list[vertex]) < len(adj_list[min_degree_vertex]):
+                            min_degree_vertex = vertex
+
+                neighbors = adj_list[min_degree_vertex]
+                adj_list.pop(min_degree_vertex)
+                self.optimal_ordering.append(min_degree_vertex)
+                self.maximal_cliques.append(set([min_degree_vertex] + neighbors))
+
+                for i in range(len(neighbors)):
+                    for j in range(i+1, len(neighbors)):
+                        if neighbors[j] not in adj_list[neighbors[i]]:
+                            adj_list[neighbors[i]].append(neighbors[j])
+                            adj_list[neighbors[j]].append(neighbors[i])
+                            self.adjacency_list[neighbors[i]].append(neighbors[j])
+                            self.adjacency_list[neighbors[j]].append(neighbors[i])
+                            
+        assert len(self.optimal_ordering) == self.num_variables
+        for clique in self.maximal_cliques:
+            for other_clique in self.maximal_cliques:
+                if clique != other_clique and clique.issubset(other_clique):
+                    self.maximal_cliques.remove(clique)
+                    break
         return self.maximal_cliques
         
         
@@ -117,41 +145,17 @@ class Inference:
 
         Refer to the problem statement for details on junction tree construction.
         """
-        self.junction_tree = [[] for _ in range(len(self.maximal_cliques))]
-        junction_edges = []
-        for i in range(len(self.maximal_cliques)):
-            for j in range(i+1, len(self.maximal_cliques)):
-                intersection = set(self.maximal_cliques[i]) & set(self.maximal_cliques[j])
-                if len(intersection) > 0:
-                    junction_edges.append((i, j, len(intersection)))
-        
-        # Kruskal's algorithm
-        sorted_edges = sorted(junction_edges, key = lambda x: x[2])
-        parent = [i for i in range(len(self.maximal_cliques))]
-        rank = [0] * len(self.maximal_cliques)
-        for i, j, _ in sorted_edges:
-            k, l = i, j
-            while parent[k] != k:
-                k = parent[k]
-            while parent[l] != l:
-                l = parent[l]
-            if k == l:
-                parent[i] = l
-                parent[j] = l
-                continue
-            if rank[k] < rank[l]:
-                parent[i] = l
-                parent[j] = l
-                parent[k] = l
-            elif rank[k] > rank[l]:
-                parent[i] = k
-                parent[j] = k
-                parent[l] = k
-            self.junction_tree[i].append(j)
-            self.junction_tree[j].append(i)
-        
-        # TODO: Verify RIP property
 
+        self.junction_tree = [[] for _ in range(len(self.maximal_cliques))]
+        for i in range(len(self.maximal_cliques)):
+            node = self.maximal_cliques[i]
+            for j in range(i+1, len(self.maximal_cliques)):
+                other_node = self.maximal_cliques[j]
+                if node != other_node and len(node.intersection(other_node)) > 0:
+                    if node not in self.junction_tree:
+                        self.junction_tree[i] = []
+                    self.junction_tree[i].append(j)
+                    self.junction_tree[j].append(i)
         return self.junction_tree
 
     def assign_potentials_to_cliques(self):
@@ -166,22 +170,20 @@ class Inference:
         Refer to the sample test case for how potentials are associated with cliques.
         """
         self.jt_potentials = []
-        for maximal_clique in self.maximal_cliques:
-            appropriate_cliques = []
-            for clique, potential in self.cliques:
-                if set(clique).issubset(set(maximal_clique)):
-                    appropriate_cliques.append((clique, potential))
-            maximal_potential = [1] * 2 ** len(maximal_clique)
-            for i in range(2 ** len(maximal_clique)):
-                for clique, potential in appropriate_cliques:
-                    clique_index = 0
-                    for j in range(len(clique)):
-                        clique_index *= 2
-                        clique_index += ((i >> clique[j]) & 1)
-                    maximal_potential[i] *= potential[clique_index]
-            self.jt_potentials.append((maximal_clique, maximal_potential))
+        for clique in self.maximal_cliques:
+            self.jt_potentials.append((clique, [1] * 2 ** len(clique)))
+            for node in clique:
+                for c, p in self.cliques:
+                    if not set(c).issubset(clique):
+                        continue
+                    self.cliques.remove((c, p))
+                    for j in range(2 ** len(clique)):
+                        index = 0
+                        for k in c:
+                            index *= 2
+                            index += ((j >> k) & 1)
+                        self.jt_potentials[-1][1][j] *= p[index]
         return self.jt_potentials
-
 
     def get_z_value(self):
         """
@@ -194,7 +196,7 @@ class Inference:
         
         Refer to the problem statement for details on computing the partition function.
         """
-        ordering = list(range(self.num_variables)) # TODO: Implement ordering
+        ordering = self.optimal_ordering
         all_factors = set([(tuple(a), tuple(b)) for (a,b) in self.jt_potentials])
         for i in ordering:
             factors = []
@@ -230,7 +232,7 @@ class Inference:
         
         Refer to the sample test case for the expected format of the marginals.
         """
-        ordering = list(range(self.num_variables)) # TODO: Implement ordering
+        ordering = self.optimal_ordering
         self.marginals = [[1, 1] for _ in range(self.num_variables)]
         for i in range (self.num_variables):
             all_factors = set([(tuple(a), tuple(b)) for (a,b) in self.jt_potentials])
