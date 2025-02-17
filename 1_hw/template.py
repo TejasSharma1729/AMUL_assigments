@@ -88,26 +88,32 @@ class Inference:
         """
         nodes = set(range(self.num_variables))
         self.optimal_ordering = []
-        # adj_list = [list(set(neighbors)) for neighbors in self.adjacency_list]
+        # adj_list = CLONE of graph, which is MODIFIED, should be EMPTY at the end
         adj_list = {i: list(set(neighbors)) for i, neighbors in enumerate(self.adjacency_list)}
         self.maximal_cliques = []
 
         while adj_list != {}:
             for vertex in adj_list.keys():
-                if len(adj_list[vertex]) == 0:  #if a vertex is isolated, add it to the ordering
+                if len(adj_list[vertex]) == 0:  
+                    #if a vertex is isolated, add it to the ordering
                     self.optimal_ordering.append(vertex)
-                    adj_list.pop(vertex)        #remove the vertex from the adjacency list
+                    adj_list.pop(vertex)        
+                    #remove the vertex from the adjacency list
 
             simplicial_vertices = find_simplicial_vertices(adj_list)
             if len(simplicial_vertices) > 0:
-                self.optimal_ordering.extend(simplicial_vertices)   #append the simplicial vertices to the ordering
-                for vertex in simplicial_vertices:      #remove all occurences of simplicial vertices from the adjacency list
+                self.optimal_ordering.extend(simplicial_vertices)   
+                #append the simplicial vertices to the ordering
+                for vertex in simplicial_vertices:      
+                    #remove all occurences of simplicial vertices from the adjacency list
                     for neighbor in adj_list[vertex]:
                         adj_list[neighbor].remove(vertex)
-                    self.maximal_cliques.append(set([vertex] + adj_list[vertex]))   #add the simplicial vertex and its neighbors to the maximal cliques
+                    self.maximal_cliques.append(set([vertex] + adj_list[vertex]))   
+                    #add the simplicial vertex and its neighbors to the maximal cliques
                     adj_list.pop(vertex)
 
-            else:   #find min degree vertex
+            else:   
+                #find min degree vertex
                 min_degree_vertex = -1
                 for (vertex, neighbors) in adj_list.items():
                     if len(neighbors) > 0:
@@ -118,10 +124,13 @@ class Inference:
                 adj_list.pop(min_degree_vertex)
                 for neighbor in neighbors:
                     adj_list[neighbor].remove(min_degree_vertex)
-                self.optimal_ordering.append(min_degree_vertex)  #add the min degree vertex to the ordering
-                self.maximal_cliques.append(set([min_degree_vertex] + neighbors)) #add the min degree vertex and its neighbors to the maximal cliques
+                self.optimal_ordering.append(min_degree_vertex)  
+                #add the min degree vertex to the ordering
+                self.maximal_cliques.append(set([min_degree_vertex] + neighbors)) 
+                #add the min degree vertex and its neighbors to the maximal cliques
 
-                for i in range(len(neighbors)): #triangulate the graph by adding edges between the neighbors of the min degree vertex
+                for i in range(len(neighbors)): 
+                    #triangulate the graph by adding edges between the neighbors of the min degree vertex
                     for j in range(i+1, len(neighbors)):
                         if neighbors[j] not in adj_list[neighbors[i]]:
                             adj_list[neighbors[i]].append(neighbors[j])
@@ -176,20 +185,33 @@ class Inference:
         """
         self.jt_potentials = []
         for clique in self.maximal_cliques:
-            cl = list(clique)
-            cl.sort()
+            cl_list = list(clique)
+            cl_list.sort()
             self.jt_potentials.append((clique, [1] * 2 ** len(clique)))
+
+            # Created the masterlist for potential. Now, we need to assign values to it.
+            # Just like normal potential, express as len(clique) bits.
+            # MSB ... LSB represent var 0, var 1, ... var (last) in clique, in order
             for node in clique:
                 for c, p in self.cliques:
                     if not set(c).issubset(clique):
                         continue
+
                     self.cliques.remove((c, p))
-                    cinds = [cl.index(i) for i in c]
+                    cinds = [cl_list.index(i) for i in c]
                     for j in range(2 ** len(clique)):
+                        # Find the corresponding assignment of all variables
+                        # Reverse because MSB (not LSB) is the first variable
+                        parity_ofj = [(j >> k) & 1 for k in range(len(clique) - 1, -1, -1)]
                         index = 0
+
                         for k in range(len(c)):
-                            index += ((j >> cinds[k]) & 1) * 2 ** k
+                            if (parity_ofj[cl_list.index(c[k])] == 1):
+                                # Corresponding bit in subset clique "c" is 1
+                                # Once again, reverse because MSB is the first variable
+                                index += 2 ** (len(c) - 1 - k)
                         self.jt_potentials[-1][1][j] *= p[index]
+        
         assert len(self.cliques) == 0
         return self.jt_potentials
 
@@ -204,28 +226,55 @@ class Inference:
         
         Refer to the problem statement for details on computing the partition function.
         """
-        ordering = self.optimal_ordering
         all_factors = set([(tuple(a), tuple(b)) for (a,b) in self.jt_potentials])
-        for i in ordering:
+        # Creates a deep copy. all_factors is modified, but jt_potentials is not.
+
+        for i in self.optimal_ordering:
             factors = []
             variables = set()
             for factor in all_factors:
                 if i in factor[0]:
                     factors.append(factor)
                     variables = variables.union(set(factor[0]))
-            variables.remove(i)
-            product_wo_i = [1] * 2 ** (len(variables))
+            # Now, we have all factors that contain variable i
+
+            # We need to multiply them all together
+            product = [1] * 2 ** (len(variables))
+            var_list = list(variables)
+            idx_ofi = list(variables).index(i)
+
             for j in range(2 ** (len(variables))):
+                # Once again, reverse because MSB is the first variable
+                parity_ofj = [(j >> k) & 1 for k in range(len(variables) - 1, -1, -1)]
                 for factor in factors:
                     factor_index = 0
-                    idx_ofi = factor[0].index(i)
                     for k in range(len(factor[0])):
-                        if factor[0][k] != i:
-                            factor_index += ((j >> factor[0][k]) & 1) * 2 ** k
-                    product_wo_i[j] *= (factor[1][factor_index] + factor[1][factor_index + 2 ** idx_ofi])
+                        if (parity_ofj[var_list.index(factor[0][k])] == 1):
+                            factor_index += 2 ** (len(factor[0]) - 1 - k)
+                    product[j] *= factor[1][factor_index]
+
+                # This is a modification after multiplication to ease marginal computation
+                # I assign (assignment but i = 0) ka value += (assignment) ka value
+                # whenever "i" is assigned 1. Then make assignment ka value 0.
+                if (j >> (len(var_list) - 1 - idx_ofi)) & 1 == 1:
+                    product[j ^ (1 << (len(var_list) - 1 - idx_ofi))] += product[j]
+                    product[j] = 0
+            
+            # Remove the product where i = 1
+            # Correctness: all remaining bits occur in same order as expected.
+            product_wo_i = [j for j in product if j != 0]
+            variables.remove(i)
+            var_list = list(variables) + [i]
             all_factors = all_factors - set(factors)
             all_factors.add((tuple(variables), tuple(product_wo_i)))
-        self.Z_value = sum(list(all_factors)[0][1])
+        
+        # Last loop is in case more than one factor persists
+        # But since all variables are marginalized out, factors should be empty
+        # Potential should contain only one value, obviously
+        self.Z_value = 1
+        for factor in all_factors:
+            assert len(factor[0]) == 0
+            self.Z_value *= factor[1][0]
         return self.Z_value
 
 
@@ -240,32 +289,59 @@ class Inference:
         
         Refer to the sample test case for the expected format of the marginals.
         """
-        ordering = self.optimal_ordering
         self.marginals = [[1, 1] for _ in range(self.num_variables)]
         for i in range (self.num_variables):
             all_factors = set([(tuple(a), tuple(b)) for (a,b) in self.jt_potentials])
-            for j in range(self.num_variables):
+            # Once again, deep copy [once for each "i" -- whole thing repeats for each "i"]
+
+            for j in self.optimal_ordering:
                 if j == i:
                     continue
+                    # We DO NOT want to marginalize out the variable we are interested in
+                    # However, we marginalize the rest, just like in Z computation
+                
                 factors = []
                 variables = set()
                 for factor in all_factors:
                     if j in factor[0]:
                         factors.append(factor)
                         variables = variables.union(set(factor[0]))
-                variables.remove(j)
-                product_wo_j = [1] * 2 ** (len(variables))
+                
+                # Once again, compute the product with "j" marginalized out
+                product = [1] * 2 ** (len(variables))
+                var_list = list(variables)
+                idx_ofj = list(variables).index(j)
+
                 for k in range(2 ** (len(variables))):
+                    # Once again, reverse because MSB is the first variable
+                    parity_ofk = [(k >> l) & 1 for l in range(len(variables) - 1, -1, -1)]
                     for factor in factors:
                         factor_index = 0
                         for l in range(len(factor[0])):
-                            if factor[0][l] != j:
-                                factor_index += ((k >> factor[0][l]) & 1) * 2 ** l
-                        product_wo_j[k] *= factor[1][factor_index]
+                            if (parity_ofk[var_list.index(factor[0][l])] == 1):
+                                factor_index += 2 ** (len(factor[0]) - 1 - l)
+                        product[k] *= factor[1][factor_index]
+                    
+                    # Once again, this is a modification after multiplication to ease marginal computation
+                    if (k >> (len(var_list) - 1 - idx_ofj)) & 1 == 1:
+                        product[k ^ (1 << (len(var_list) - 1 - idx_ofj))] += product[k]
+                        product[k] = 0
+                
+                # Remove the product where j = 1
+                product_wo_j = [k for k in product if k != 0]
+                variables.remove(j)
                 all_factors = all_factors - set(factors)
                 all_factors.add((tuple(variables), tuple(product_wo_j)))
-            self.marginals[i] = [sum(list(all_factors)[0][1][::2]), sum(list(all_factors)[0][1][1::2])]
-        for i in range(self.num_variables):
+            
+            # Now, we have the product of all factors that do not contain "i"
+            # All remaining factors have only "i" as a variable
+            # Product of those potentials (factors) = required marginal
+            for factor in all_factors:
+                assert len(factor[0]) == 1 and factor[0][0] == i
+                self.marginals[i][0] *= factor[1][0]
+                self.marginals[i][1] *= factor[1][1]
+            
+            # Normalize the marginals
             self.marginals[i][0] /= self.Z_value
             self.marginals[i][1] /= self.Z_value
         return self.marginals
