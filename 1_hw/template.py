@@ -176,18 +176,21 @@ class Inference:
         """
         self.jt_potentials = []
         for clique in self.maximal_cliques:
+            cl = list(clique)
+            cl.sort()
             self.jt_potentials.append((clique, [1] * 2 ** len(clique)))
             for node in clique:
                 for c, p in self.cliques:
                     if not set(c).issubset(clique):
                         continue
                     self.cliques.remove((c, p))
+                    cinds = [cl.index(i) for i in c]
                     for j in range(2 ** len(clique)):
                         index = 0
-                        for k in c:
-                            index *= 2
-                            index += ((j >> k) & 1)
+                        for k in range(len(c)):
+                            index += ((j >> cinds[k]) & 1) * 2 ** k
                         self.jt_potentials[-1][1][j] *= p[index]
+        assert len(self.cliques) == 0
         return self.jt_potentials
 
     def get_z_value(self):
@@ -215,11 +218,11 @@ class Inference:
             for j in range(2 ** (len(variables))):
                 for factor in factors:
                     factor_index = 0
+                    idx_ofi = factor[0].index(i)
                     for k in range(len(factor[0])):
                         if factor[0][k] != i:
-                            factor_index *= 2
-                            factor_index += ((j >> factor[0][k]) & 1)
-                    product_wo_i[j] *= factor[1][factor_index]
+                            factor_index += ((j >> factor[0][k]) & 1) * 2 ** k
+                    product_wo_i[j] *= (factor[1][factor_index] + factor[1][factor_index + 2 ** idx_ofi])
             all_factors = all_factors - set(factors)
             all_factors.add((tuple(variables), tuple(product_wo_i)))
         self.Z_value = sum(list(all_factors)[0][1])
@@ -257,8 +260,7 @@ class Inference:
                         factor_index = 0
                         for l in range(len(factor[0])):
                             if factor[0][l] != j:
-                                factor_index *= 2
-                                factor_index += ((k >> factor[0][l]) & 1)
+                                factor_index += ((k >> factor[0][l]) & 1) * 2 ** l
                         product_wo_j[k] *= factor[1][factor_index]
                 all_factors = all_factors - set(factors)
                 all_factors.add((tuple(variables), tuple(product_wo_j)))
