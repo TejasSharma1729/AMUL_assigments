@@ -15,20 +15,20 @@ import heapq
 
 ########################################################################
 
-def find_simplicial_vertices(adjacency_list):
+def find_simplicial_vertices(adjacency_list):   #function to find simplicial vertices (brute force)
     simplicial_vertices = []
     for (vertex, neighbors) in adjacency_list.items():
         flag = True
-        if len(neighbors) > 1:
+        if len(neighbors) > 1:      #check if vertex is isolated
             for i in range(len(neighbors)):
                 if not flag:
                     break
                 for j in range(i+1, len(neighbors)):
-                    if neighbors[i] not in adjacency_list[neighbors[j]]:
+                    if neighbors[i] not in adjacency_list[neighbors[j]]:    #check if neighbors are not connected
                         flag = False
                         break
         if flag:
-            simplicial_vertices.append(vertex)
+            simplicial_vertices.append(vertex)  #add simplicial vertices to the list
     return simplicial_vertices
 
 
@@ -50,12 +50,14 @@ class Inference:
         
         Refer to the sample test case for the structure of the input data.
         """
+        #initialize the variables from the input data
         self.num_variables = data["VariablesCount"]
         self.kval_in_top_k = data["k value (in top k)"]
         self.num_potentials = data["Potentials_count"]
         self.cliques = [(clique["cliques"], clique["potentials"]) for clique in data["Cliques and Potentials"]]
         self.adjacency_list = [[] for _ in range(self.num_variables)]
 
+        #initialize the adjacency list
         for clique in self.cliques:
             for vertex in clique[0]:
                 self.adjacency_list[vertex] = list(set(self.adjacency_list[vertex] + clique[0]))
@@ -91,20 +93,20 @@ class Inference:
 
         while adj_list != {}:
             for vertex in adj_list.keys():
-                if len(adj_list[vertex]) == 0:
+                if len(adj_list[vertex]) == 0:  #if a vertex is isolated, add it to the ordering
                     self.optimal_ordering.append(vertex)
-                    adj_list.pop(vertex)
+                    adj_list.pop(vertex)        #remove the vertex from the adjacency list
 
             simplicial_vertices = find_simplicial_vertices(adj_list)
             if len(simplicial_vertices) > 0:
-                self.optimal_ordering.extend(simplicial_vertices)
-                for vertex in simplicial_vertices:
+                self.optimal_ordering.extend(simplicial_vertices)   #append the simplicial vertices to the ordering
+                for vertex in simplicial_vertices:      #remove all occurences of simplicial vertices from the adjacency list
                     for neighbor in adj_list[vertex]:
                         adj_list[neighbor].remove(vertex)
-                    self.maximal_cliques.append(set([vertex] + adj_list[vertex]))
+                    self.maximal_cliques.append(set([vertex] + adj_list[vertex]))   #add the simplicial vertex and its neighbors to the maximal cliques
                     adj_list.pop(vertex)
 
-            else:
+            else:   #find min degree vertex
                 min_degree_vertex = -1
                 for (vertex, neighbors) in adj_list.items():
                     if len(neighbors) > 0:
@@ -113,10 +115,10 @@ class Inference:
 
                 neighbors = adj_list[min_degree_vertex]
                 adj_list.pop(min_degree_vertex)
-                self.optimal_ordering.append(min_degree_vertex)
-                self.maximal_cliques.append(set([min_degree_vertex] + neighbors))
+                self.optimal_ordering.append(min_degree_vertex)  #add the min degree vertex to the ordering
+                self.maximal_cliques.append(set([min_degree_vertex] + neighbors)) #add the min degree vertex and its neighbors to the maximal cliques
 
-                for i in range(len(neighbors)):
+                for i in range(len(neighbors)): #triangulate the graph by adding edges between the neighbors of the min degree vertex
                     for j in range(i+1, len(neighbors)):
                         if neighbors[j] not in adj_list[neighbors[i]]:
                             adj_list[neighbors[i]].append(neighbors[j])
@@ -125,7 +127,7 @@ class Inference:
                             self.adjacency_list[neighbors[j]].append(neighbors[i])
                             
         assert len(self.optimal_ordering) == self.num_variables
-        for clique in self.maximal_cliques:
+        for clique in self.maximal_cliques: #remove redundant maximal cliques
             for other_clique in self.maximal_cliques:
                 if clique != other_clique and clique.issubset(other_clique):
                     self.maximal_cliques.remove(clique)
