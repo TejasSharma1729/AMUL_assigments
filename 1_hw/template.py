@@ -115,6 +115,8 @@ class Inference:
 
                 neighbors = adj_list[min_degree_vertex]
                 adj_list.pop(min_degree_vertex)
+                for neighbor in neighbors:
+                    adj_list[neighbor].remove(min_degree_vertex)
                 self.optimal_ordering.append(min_degree_vertex)  #add the min degree vertex to the ordering
                 self.maximal_cliques.append(set([min_degree_vertex] + neighbors)) #add the min degree vertex and its neighbors to the maximal cliques
 
