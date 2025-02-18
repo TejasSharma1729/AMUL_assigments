@@ -93,7 +93,7 @@ class Inference:
         self.maximal_cliques = []
 
         while adj_list != {}:
-            for vertex in adj_list.keys():
+            for vertex in list(adj_list.keys()):
                 if len(adj_list[vertex]) == 0:  
                     #if a vertex is isolated, add it to the ordering
                     self.optimal_ordering.append(vertex)
@@ -119,6 +119,8 @@ class Inference:
                     if len(neighbors) > 0:
                         if min_degree_vertex == -1 or len(adj_list[vertex]) < len(adj_list[min_degree_vertex]):
                             min_degree_vertex = vertex
+                if min_degree_vertex == -1:
+                    break
 
                 neighbors = adj_list[min_degree_vertex]
                 adj_list.pop(min_degree_vertex)
@@ -397,6 +399,6 @@ class Get_Input_and_Check_Output:
 
 
 if __name__ == '__main__':
-    evaluator = Get_Input_and_Check_Output('Sample_Testcase.json')
+    evaluator = Get_Input_and_Check_Output('TestCases.json')
     evaluator.get_output()
-    evaluator.write_output('Sample_Testcase_Output.json')
+    evaluator.write_output('TestCases_Output.json')
