@@ -18,7 +18,26 @@
                 0.7008474576271186
             ]
         ],
-        "Top_k_assignments": null,
+        "Top_k_assignments": [
+            {
+                "assignment": [
+                    1,
+                    0,
+                    1,
+                    1
+                ],
+                "probability": 0.2076271186440678
+            },
+            {
+                "assignment": [
+                    0,
+                    0,
+                    1,
+                    1
+                ],
+                "probability": 0.1423728813559322
+            }
+        ],
         "Z_value": 1180
     }
 ]

@@ -22,7 +22,28 @@
                 0.5059004852802468
             ]
         ],
-        "Top_k_assignments": null,
+        "Top_k_assignments": [
+            {
+                "assignment": [
+                    1,
+                    1,
+                    0,
+                    0,
+                    1
+                ],
+                "probability": 0.21731866224871885
+            },
+            {
+                "assignment": [
+                    1,
+                    1,
+                    0,
+                    0,
+                    0
+                ],
+                "probability": 0.16768415296969047
+            }
+        ],
         "Z_value": 71206865715916800
     },
     {
@@ -48,7 +69,38 @@
                 0.8596062975496294
             ]
         ],
-        "Top_k_assignments": null,
+        "Top_k_assignments": [
+            {
+                "assignment": [
+                    1,
+                    1,
+                    1,
+                    1,
+                    1
+                ],
+                "probability": 0.3333879531180908
+            },
+            {
+                "assignment": [
+                    1,
+                    1,
+                    1,
+                    0,
+                    1
+                ],
+                "probability": 0.33060972017544
+            },
+            {
+                "assignment": [
+                    1,
+                    0,
+                    1,
+                    1,
+                    1
+                ],
+                "probability": 0.09525370089088307
+            }
+        ],
         "Z_value": 23587769316951000
     },
     {
@@ -74,7 +126,38 @@
                 0.04998252145359008
             ]
         ],
-        "Top_k_assignments": null,
+        "Top_k_assignments": [
+            {
+                "assignment": [
+                    1,
+                    0,
+                    1,
+                    1,
+                    0
+                ],
+                "probability": 0.3979812560680019
+            },
+            {
+                "assignment": [
+                    1,
+                    0,
+                    0,
+                    1,
+                    0
+                ],
+                "probability": 0.36180114188000173
+            },
+            {
+                "assignment": [
+                    1,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "probability": 0.08833749471091583
+            }
+        ],
         "Z_value": 542363640666658560
     },
     {
@@ -100,7 +183,28 @@
                 0.47427515829315214
             ]
         ],
-        "Top_k_assignments": null,
+        "Top_k_assignments": [
+            {
+                "assignment": [
+                    0,
+                    0,
+                    1,
+                    1,
+                    0
+                ],
+                "probability": 0.2552101916157819
+            },
+            {
+                "assignment": [
+                    0,
+                    1,
+                    1,
+                    1,
+                    1
+                ],
+                "probability": 0.15501003133475097
+            }
+        ],
         "Z_value": 289831409251925472
     },
     {
@@ -126,7 +230,38 @@
                 0.14082377866693466
             ]
         ],
-        "Top_k_assignments": null,
+        "Top_k_assignments": [
+            {
+                "assignment": [
+                    1,
+                    1,
+                    0,
+                    0,
+                    0
+                ],
+                "probability": 0.2765752935476543
+            },
+            {
+                "assignment": [
+                    1,
+                    1,
+                    0,
+                    1,
+                    0
+                ],
+                "probability": 0.10917445797933724
+            },
+            {
+                "assignment": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "probability": 0.10710910386077341
+            }
+        ],
         "Z_value": 230233434182538000
     }
 ]

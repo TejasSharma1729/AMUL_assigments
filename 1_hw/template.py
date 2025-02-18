@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
 import json
 import math
-import itertools
-import collections
-import functools
-import random
-import heapq
 
 
 
@@ -16,20 +11,24 @@ import heapq
 
 ########################################################################
 
-def find_simplicial_vertices(adjacency_list):   #function to find simplicial vertices (brute force)
+def find_simplicial_vertices(adjacency_list):   
+    #function to find simplicial vertices (brute force)
     simplicial_vertices = []
     for (vertex, neighbors) in adjacency_list.items():
         flag = True
-        if len(neighbors) > 1:      #check if vertex is isolated
+        if len(neighbors) > 1:      
+            #check if vertex is isolated
             for i in range(len(neighbors)):
                 if not flag:
                     break
                 for j in range(i+1, len(neighbors)):
-                    if neighbors[i] not in adjacency_list[neighbors[j]]:    #check if neighbors are not connected
+                    if neighbors[i] not in adjacency_list[neighbors[j]]:    
+                        #check if neighbors are not connected
                         flag = False
                         break
         if flag:
-            simplicial_vertices.append(vertex)  #add simplicial vertices to the list
+            simplicial_vertices.append(vertex)  
+            #add simplicial vertices to the list
     return simplicial_vertices
 
 
@@ -56,6 +55,7 @@ class Inference:
         self.kval_in_top_k = data["k value (in top k)"]
         self.num_potentials = data["Potentials_count"]
         self.cliques = [(clique["cliques"], clique["potentials"]) for clique in data["Cliques and Potentials"]]
+        self.K_value = data["k value (in top k)"]
         self.adjacency_list = [[] for _ in range(self.num_variables)]
 
         #initialize the adjacency list
@@ -72,6 +72,7 @@ class Inference:
         self.jt_potentials = None
         self.Z_value = None
         self.marginals = None
+        self.top_k_assignments = None
         return
 
     def triangulate_and_get_cliques(self):
@@ -86,6 +87,8 @@ class Inference:
 
         Refer to the problem statement for details on triangulation and clique extraction.
         """
+        # Most of the graph processing is done here, including cmputing self.optimal_ordering
+        # which is a list, that states what order to marginalize out the variables in.
         nodes = set(range(self.num_variables))
         self.optimal_ordering = []
         # adj_list = CLONE of graph, which is MODIFIED, should be EMPTY at the end
@@ -95,25 +98,25 @@ class Inference:
         while adj_list != {}:
             for vertex in list(adj_list.keys()):
                 if len(adj_list[vertex]) == 0:  
-                    #if a vertex is isolated, add it to the ordering
+                    # if a vertex is isolated, add it to the ordering
                     self.optimal_ordering.append(vertex)
                     adj_list.pop(vertex)        
-                    #remove the vertex from the adjacency list
+                    # remove the vertex from the adjacency list
 
             simplicial_vertices = find_simplicial_vertices(adj_list)
             if len(simplicial_vertices) > 0:
                 self.optimal_ordering.extend(simplicial_vertices)   
-                #append the simplicial vertices to the ordering
+                # append the simplicial vertices to the ordering
                 for vertex in simplicial_vertices:      
-                    #remove all occurences of simplicial vertices from the adjacency list
+                    # remove all occurences of simplicial vertices from the adjacency list
                     for neighbor in adj_list[vertex]:
                         adj_list[neighbor].remove(vertex)
                     self.maximal_cliques.append(set([vertex] + adj_list[vertex]))   
-                    #add the simplicial vertex and its neighbors to the maximal cliques
+                    # add the simplicial vertex and its neighbors to the maximal cliques
                     adj_list.pop(vertex)
 
             else:   
-                #find min degree vertex
+                # find min degree vertex
                 min_degree_vertex = -1
                 for (vertex, neighbors) in adj_list.items():
                     if len(neighbors) > 0:
@@ -127,12 +130,12 @@ class Inference:
                 for neighbor in neighbors:
                     adj_list[neighbor].remove(min_degree_vertex)
                 self.optimal_ordering.append(min_degree_vertex)  
-                #add the min degree vertex to the ordering
+                # add the min degree vertex to the ordering
                 self.maximal_cliques.append(set([min_degree_vertex] + neighbors)) 
-                #add the min degree vertex and its neighbors to the maximal cliques
+                # add the min degree vertex and its neighbors to the maximal cliques
 
                 for i in range(len(neighbors)): 
-                    #triangulate the graph by adding edges between the neighbors of the min degree vertex
+                    # triangulate the graph by adding edges between the neighbors of the min degree vertex
                     for j in range(i+1, len(neighbors)):
                         if neighbors[j] not in adj_list[neighbors[i]]:
                             adj_list[neighbors[i]].append(neighbors[j])
@@ -141,7 +144,8 @@ class Inference:
                             self.adjacency_list[neighbors[j]].append(neighbors[i])
                             
         assert len(self.optimal_ordering) == self.num_variables
-        for clique in self.maximal_cliques: #remove redundant maximal cliques
+        for clique in self.maximal_cliques: 
+            # remove redundant maximal cliques
             for other_clique in self.maximal_cliques:
                 if clique != other_clique and clique.issubset(other_clique):
                     self.maximal_cliques.remove(clique)
@@ -167,11 +171,19 @@ class Inference:
             node = self.maximal_cliques[i]
             for j in range(i+1, len(self.maximal_cliques)):
                 other_node = self.maximal_cliques[j]
+
                 if node != other_node and len(node.intersection(other_node)) > 0:
                     if node not in self.junction_tree:
                         self.junction_tree[i] = []
                     self.junction_tree[i].append(j)
                     self.junction_tree[j].append(i)
+        
+        # This is the standard Junction Tree construction
+        # Note: self.junction_tree is a list of lists, each being list of integers
+        # This is an adjacency list.
+        # self.cliques is a list of tuples, each tuple being (clique, potential)
+        # self.maximal_cliques is a list of sets, each set being a clique
+        # and self.jt_potentials is a list of tuples, each tuple being (clique, potential)
         return self.junction_tree
 
     def assign_potentials_to_cliques(self):
@@ -230,6 +242,7 @@ class Inference:
         """
         all_factors = set([(tuple(a), tuple(b)) for (a,b) in self.jt_potentials])
         # Creates a deep copy. all_factors is modified, but jt_potentials is not.
+        # Algorithm used: Variable Elimination 
 
         for i in self.optimal_ordering:
             factors = []
@@ -360,7 +373,90 @@ class Inference:
         
         Refer to the sample test case for the expected format of the top-k assignments.
         """
-        pass
+        all_factors = set([(tuple(a), tuple([((c, ()),) for c in b])) for (a,b) in self.jt_potentials])
+        # all_factors = set of factors, each factor is a tuple of (variables, potential)
+        # the potential is a list/tuple of 2 ** num(variables) elements
+        # each element is a list of upto K values, each value is a tuple of (probability, assignment)
+        # each assignment is a list/tuple of (variable, value [0/1]). 
+        # Ofc, only top K assignments are stored based on probability.
+        # Further, for each clique "assignments" are of variables marginalized out.
+        # whereas "variables" are those that are not marginalized out yet.
+
+        for i in self.optimal_ordering:
+            factors = []
+            variables = set()
+            for factor in all_factors:
+                if i in factor[0]:
+                    factors.append(factor)
+                    variables = variables.union(set(factor[0]))
+            
+            # Product = the potential BEFORE marginalizing out "i"
+            product = [[(1, [])] for _ in range(2 ** len(variables))]
+            var_list = list(variables)
+            idx_ofi = list(variables).index(i)
+
+            for j in range(2 ** (len(variables))):
+                parity_ofj = [(j >> k) & 1 for k in range(len(variables) - 1, -1, -1)]
+                for factor in factors:
+                    factor_index = 0
+                    for k in range(len(factor[0])):
+                        if (parity_ofj[var_list.index(factor[0][k])] == 1):
+                            factor_index += 2 ** (len(factor[0]) - 1 - k)
+                    
+                    # temp is a list of (probability, assignment) tuples
+                    # these are obtained by multiplying the existing product with the factor
+                    # obviously, assignments get concatenated and probabilities get multiplied
+                    # and number of combinations gets multiplied.
+                    temp = [(product[j][k][0] * factor[1][factor_index][l][0], \
+                            product[j][k][1] + list(factor[1][factor_index][l][1])) \
+                            for k in range(len(product[j])) for l in range(len(factor[1][factor_index]))]
+                    temp.sort(key = lambda x: -x[0])
+                    # number of combinations get multiplied but reduced via top K
+                    # purpose of sort by lambda x : -x[0] ==> descending order of first element in tuple
+                    # where tuple (probability, assignment) is the element of list "temp"
+                    if (len(temp) > self.K_value):
+                        temp = temp[:self.K_value]
+                    product[j] = temp
+
+            product_woi = []
+            for j in range(2 ** len(variables)):
+                jj = j ^ (1 << (len(var_list) - 1 - idx_ofi))
+                if (j >> (len(var_list) - 1 - idx_ofi)) & 1 == 1:
+                    continue
+                # The purpose of all this is to marginalize out "i".
+                # Notice how parities are used to find the corresponding assignment
+                # and how "jj" is defined from "j" to remove the bit corresponding to "i"
+
+                # temp0 and temp1 are elements in product, all variables but "i" same
+                temp0 = [(a, ((i, 0),) + tuple(b)) for a, b in product[j]]
+                temp1 = [(a, ((i, 1),) + tuple(b)) for a, b in product[jj]]
+                temp = temp0 + temp1
+
+                # Below part: get top K assignments including of "i" after marginalizing out "i"
+                temp.sort(key = lambda x: -x[0])
+                if (len(temp) > self.K_value):
+                    temp = temp[:self.K_value]
+                product_woi.append(tuple(temp))
+            
+            # Cleanup for the next iteration of variable elimination
+            variables.remove(i)
+            all_factors = all_factors - set(factors)
+            all_factors.add((tuple(variables), tuple(product_woi)))
+
+        all_factors = list(all_factors)
+        assert len(all_factors) == 1
+        assert len(all_factors[0][0]) == 0
+        # At the end, ONE potential with no variable (all marginalized out)
+        # and the 2 ** 0 = 1 value is a list of top K assignments of (all)
+        # variables that are now marginalized out.
+
+        self.top_k_assignments = []
+        for i in range(self.K_value):
+            assignment = list(all_factors[0][1][0][i][1])
+            assignment.sort(key = lambda x: x[0])
+            self.top_k_assignments.append({"assignment": [x[1] for x in assignment], \
+                    "probability": all_factors[0][1][0][i][0] / self.Z_value})
+        return self.top_k_assignments
 
 
 
