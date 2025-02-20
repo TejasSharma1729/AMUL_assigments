@@ -144,9 +144,10 @@ class Inference:
                             self.adjacency_list[neighbors[j]].append(neighbors[i])
                             
         assert len(self.optimal_ordering) == self.num_variables
-        for clique in self.maximal_cliques: 
+        temp_cliques = [clique for clique in self.maximal_cliques]
+        for clique in temp_cliques:
             # remove redundant maximal cliques
-            for other_clique in self.maximal_cliques:
+            for other_clique in temp_cliques:
                 if clique != other_clique and clique.issubset(other_clique):
                     self.maximal_cliques.remove(clique)
                     break
@@ -352,9 +353,14 @@ class Inference:
             # All remaining factors have only "i" as a variable
             # Product of those potentials (factors) = required marginal
             for factor in all_factors:
-                assert len(factor[0]) == 1 and factor[0][0] == i
-                self.marginals[i][0] *= factor[1][0]
-                self.marginals[i][1] *= factor[1][1]
+                if (len(factor[0]) == 0):
+                    self.marginals[i][0] *= factor[1][0]
+                    self.marginals[i][1] *= factor[1][0]
+                elif (len(factor[0]) == 1):
+                    self.marginals[i][0] *= factor[1][0]
+                    self.marginals[i][1] *= factor[1][1]
+                else:
+                    assert 0
             
             # Normalize the marginals
             self.marginals[i][0] /= self.Z_value
@@ -444,6 +450,30 @@ class Inference:
             all_factors.add((tuple(variables), tuple(product_woi)))
 
         all_factors = list(all_factors)
+        if (len(all_factors) > 1):
+            # Then, there are factors which have all variables margnialized but
+            # no two factors share a common variable (which was marginalized out)
+            # Case if graph is disconnected.
+            product = [[(1, [])] for _ in range(2 ** self.num_variables)]
+            for j in range(2 ** self.num_variables):
+                for factor in all_factors:
+                    factor_index = 0
+                    for k in range(len(factor[0])):
+                        if (j >> k) & 1 == 1:
+                            factor_index += 2 ** (len(factor[0]) - 1 - k)
+
+                    # Same product algorithm
+                    temp = [(product[j][k][0] * factor[1][factor_index][l][0], \
+                            product[j][k][1] + list(factor[1][factor_index][l][1])) \
+                            for k in range(len(product[j])) for l in range(len(factor[1][factor_index]))]
+                    temp.sort(key = lambda x: -x[0])
+                    if (len(temp) > self.K_value):
+                        temp = temp[:self.K_value]
+                    product[j] = temp
+
+            # Reassignment of all_factors to just the product factor
+            all_factors = [(tuple([]), tuple(product))]
+        
         assert len(all_factors) == 1
         assert len(all_factors[0][0]) == 0
         # At the end, ONE potential with no variable (all marginalized out)
@@ -495,6 +525,6 @@ class Get_Input_and_Check_Output:
 
 
 if __name__ == '__main__':
-    evaluator = Get_Input_and_Check_Output('TestCases.json')
+    evaluator = Get_Input_and_Check_Output('Extra_Testcases.json')
     evaluator.get_output()
-    evaluator.write_output('TestCases_Output.json')
+    evaluator.write_output('Extra_Testcases_Output.json')
