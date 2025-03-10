@@ -40,7 +40,7 @@ class NoiseScheduler():
 
         self.betas = torch.linspace(beta_start, beta_end, self.num_timesteps, dtype=torch.float32)
 
-        self.alphas = None
+        self.alphas = 1.0 - self.betas
 
     def __len__(self):
         return self.num_timesteps
@@ -56,8 +56,16 @@ class DDPM(nn.Module):
         We have separate learnable modules for `time_embed` and `model`. `time_embed` can be learned or a fixed function as well
 
         """
-        self.time_embed = None
-        self.model = None
+        # Chosen: MLP with ReLU activation
+        self.n_dim = n_dim
+        self.t_dim = self.n_dim # time dimension -- can be different
+        self.i_dim = self.n_dim # intermediate dimention -- for ReLU layer
+        # TODO: Set self.t_dim, self.i_dim
+        self.time_embed = nn.Linear(1, self.t_dim)
+        self.first_layer = nn.Linear(self.n_dim + self.t_dim, self.i_dim)
+        self.relu_layer = nn.ReLU()
+        self.final_layer = nn.Linear(self.i_dim, self.n_dim)
+        # self.model = nn.Sequential(self.first_layer, self.relu_layer, self.final_layer)
 
     def forward(self, x, t):
         """
@@ -68,7 +76,12 @@ class DDPM(nn.Module):
         Returns:
             torch.Tensor, the predicted noise tensor [batch_size, n_dim]
         """
-        pass
+        t_embed = self.time_embed(t)
+        x_and_t = torch.cat([x, t_embed], dim=-1)
+        relu_in = self.first_layer(x_and_t)
+        relu_out = self.relu_layer(relu_in)
+        noise_out = self.final_layer(relu_out)
+        return noise_out
 
 class ConditionalDDPM():
     pass
