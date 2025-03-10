@@ -10,6 +10,8 @@ import dataset
 import os
 import matplotlib.pyplot as plt
 
+from utils import gaussian_kernel, get_likelihood, get_nll, get_emd, split_data, sample
+
 class NoiseScheduler():
     """
     Noise scheduler for the DDPM model
@@ -172,10 +174,10 @@ def sample(model, n_samples, noise_scheduler, return_intermediate=False):
     
     for t in range(model.n_steps, 0, -1):
         z = torch.randn(n_samples, model.n_dim)
-        mu = (noise_scheduler.betas) / (noise_scheduler.sqrt_one_minus_alphas_cumprod)
-        eps_theta = model.forward(x[t], t)
-        x[t-1] = noise_scheduler.sqrt_recip_alphas * (x[t] - mu * eps_theta) + \
-                torch.sqrt(noise_scheduler.posterior_variance) * z
+        mu = (noise_scheduler.betas[t-1]) / (noise_scheduler.sqrt_one_minus_alphas_cumprod[t-1])
+        eps_theta = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device))
+        x[t-1] = noise_scheduler.sqrt_recip_alphas[t-1] * (x[t] - mu * eps_theta) + \
+                torch.sqrt(noise_scheduler.posterior_variance[t-1]) * z
         
     if (return_intermediate):
         return x
