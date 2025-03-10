@@ -42,12 +42,12 @@ class NoiseScheduler():
         # Lifted from the notebook, link below
         # https://colab.research.google.com/drive/1sjy9odlSSy0RBVgMTgP7s99NXsqglsUL?usp=sharing#scrollTo=qWw50ui9IZ5q
         self.alphas = 1.0 - self.betas
-        self.alphas_cumprod = torch.cumprod(alphas, axis=0)
+        self.alphas_cumprod = torch.cumprod(self.alphas, axis=0)
         self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0)
         self.sqrt_recip_alphas = torch.sqrt(1.0 / self.alphas)
         self.sqrt_alphas_cumprod = torch.sqrt(self.alphas_cumprod)
         self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - self.alphas_cumprod)
-        self.posterior_variance = betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
+        self.posterior_variance = self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
 
     def __len__(self):
         return self.num_timesteps
@@ -69,17 +69,17 @@ class DDPM(nn.Module):
         self.t_dim = self.n_dim # time dimension -- can be different
         self.i_dim = self.n_dim # intermediate dimention -- for ReLU layer
         # TODO: Set self.t_dim, self.i_dim
-        self.time_embed = nn.Sequential( \
-                nn.Linear(1, self.t_dim), \
-                nn.ReLU(), \
-                nn.Linear(self.t_dim, self.t_dim) \
+        self.time_embed = nn.Sequential( 
+                nn.Linear(1, self.t_dim), 
+                nn.ReLU(), 
+                nn.Linear(self.t_dim, self.t_dim) 
         )
-        self.model = nn.Sequential( \
-                nn.Linear(self.n_dim + self.t_dim, self.i_dim), \
-                nn.ReLU(), \
-                nn.Linear(self.i_dim, self.i_dim), \
-                nn.ReLU(), \
-                nn.Linear(self.i_dim, self.n_dim), \
+        self.model = nn.Sequential( 
+                nn.Linear(self.n_dim + self.t_dim, self.i_dim), 
+                nn.ReLU(), 
+                # nn.Linear(self.i_dim, self.i_dim), 
+                # nn.ReLU(), 
+                nn.Linear(self.i_dim, self.n_dim), 
         )
 
     def forward(self, x, t):
@@ -91,7 +91,7 @@ class DDPM(nn.Module):
         Returns:
             torch.Tensor, the predicted noise tensor [batch_size, n_dim]
         """
-        t_embed = self.time_embed(t)
+        t_embed = self.time_embed(t.unsqueeze(-1).float())
         x_and_t = torch.cat([x, t_embed], dim=-1)
         noise_out = self.model(x_and_t)
         return noise_out
@@ -128,6 +128,22 @@ def train(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
         epochs: int, number of epochs to train the model
         run_name: str, path to save the model
     """
+    model.train()
+    loss_fxn = nn.MSELoss()
+    for epoch in range (epochs):
+        total_loss = 0
+        for x, _ in dataloader:
+            optimizer.zero_grad()
+            t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
+            noise = torch.randn_like(x)
+            x_noisy = noise_scheduler.sqrt_alphas_cumprod * x + noise_scheduler.sqrt_one_minus_alphas_cumprod * noise
+            model_out = model(x_noisy, t)
+            loss = loss_fxn(model_out, noise)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss
+        print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader)}")
+        torch.save(model.state_dict(), os.path.join(run_name, "model.pth"))
 
 @torch.no_grad()
 def sample(model, n_samples, noise_scheduler, return_intermediate=False): 
@@ -149,7 +165,19 @@ def sample(model, n_samples, noise_scheduler, return_intermediate=False):
         Return: [[n_samples, n_dim]] x n_steps
         Optionally implement return_intermediate=True, will aid in visualizing the intermediate steps
     """   
-    pass
+    model.eval()
+    x = [torch.randn(n_samples, model.n_dim) for _ in range (0, model.n_steps + 1)]
+    
+    for t in range(model.n_steps, 0, -1):
+        z = torch.randn(n_samples, model.n_dim)
+        mu = (noise_scheduler.betas) / (noise_scheduler.sqrt_one_minus_alphas_cumprod)
+        eps_theta = model.forward(x[t], t)
+        x[t-1] = noise_scheduler.sqrt_recip_alphas * (x[t] - mu * eps_theta) + torch.sqrt(noise_scheduler.posterior_variance) * z
+        
+    if (return_intermediate):
+        return x
+    return x[0]
+        
 
 def sampleCFG(model, n_samples, noise_scheduler, guidance_scale, class_label):
     """
