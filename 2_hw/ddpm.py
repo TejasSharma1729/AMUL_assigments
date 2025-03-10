@@ -63,6 +63,7 @@ class DDPM(nn.Module):
         We have separate learnable modules for `time_embed` and `model`. `time_embed` can be learned or a fixed function as well
 
         """
+        super(DDPM, self).__init__()
         # Chosen: MLP with ReLU activation
         self.n_dim = n_dim
         self.n_steps = n_steps
@@ -136,14 +137,15 @@ def train(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
             optimizer.zero_grad()
             t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
             noise = torch.randn_like(x)
-            x_noisy = noise_scheduler.sqrt_alphas_cumprod * x + noise_scheduler.sqrt_one_minus_alphas_cumprod * noise
+            x_noisy = noise_scheduler.sqrt_alphas_cumprod[t.unsqueeze(1)] * x + \
+                    noise_scheduler.sqrt_one_minus_alphas_cumprod[t.unsqueeze(1)] * noise
             model_out = model(x_noisy, t)
             loss = loss_fxn(model_out, noise)
             loss.backward()
             optimizer.step()
             total_loss += loss
-        print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader)}")
-        torch.save(model.state_dict(), os.path.join(run_name, "model.pth"))
+        # print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader)}")
+    torch.save(model.state_dict(), os.path.join(run_name, "model.pth"))
 
 @torch.no_grad()
 def sample(model, n_samples, noise_scheduler, return_intermediate=False): 
@@ -172,7 +174,8 @@ def sample(model, n_samples, noise_scheduler, return_intermediate=False):
         z = torch.randn(n_samples, model.n_dim)
         mu = (noise_scheduler.betas) / (noise_scheduler.sqrt_one_minus_alphas_cumprod)
         eps_theta = model.forward(x[t], t)
-        x[t-1] = noise_scheduler.sqrt_recip_alphas * (x[t] - mu * eps_theta) + torch.sqrt(noise_scheduler.posterior_variance) * z
+        x[t-1] = noise_scheduler.sqrt_recip_alphas * (x[t] - mu * eps_theta) + \
+                torch.sqrt(noise_scheduler.posterior_variance) * z
         
     if (return_intermediate):
         return x
