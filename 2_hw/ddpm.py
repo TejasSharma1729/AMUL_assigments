@@ -39,8 +39,15 @@ class NoiseScheduler():
         """
 
         self.betas = torch.linspace(beta_start, beta_end, self.num_timesteps, dtype=torch.float32)
-
+        # Lifted from the notebook, link below
+        # https://colab.research.google.com/drive/1sjy9odlSSy0RBVgMTgP7s99NXsqglsUL?usp=sharing#scrollTo=qWw50ui9IZ5q
         self.alphas = 1.0 - self.betas
+        self.alphas_cumprod = torch.cumprod(alphas, axis=0)
+        self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0)
+        self.sqrt_recip_alphas = torch.sqrt(1.0 / self.alphas)
+        self.sqrt_alphas_cumprod = torch.sqrt(self.alphas_cumprod)
+        self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - self.alphas_cumprod)
+        self.posterior_variance = betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
 
     def __len__(self):
         return self.num_timesteps
@@ -58,14 +65,22 @@ class DDPM(nn.Module):
         """
         # Chosen: MLP with ReLU activation
         self.n_dim = n_dim
+        self.n_steps = n_steps
         self.t_dim = self.n_dim # time dimension -- can be different
         self.i_dim = self.n_dim # intermediate dimention -- for ReLU layer
         # TODO: Set self.t_dim, self.i_dim
-        self.time_embed = nn.Linear(1, self.t_dim)
-        self.first_layer = nn.Linear(self.n_dim + self.t_dim, self.i_dim)
-        self.relu_layer = nn.ReLU()
-        self.final_layer = nn.Linear(self.i_dim, self.n_dim)
-        # self.model = nn.Sequential(self.first_layer, self.relu_layer, self.final_layer)
+        self.time_embed = nn.Sequential( \
+                nn.Linear(1, self.t_dim), \
+                nn.ReLU(), \
+                nn.Linear(self.t_dim, self.t_dim) \
+        )
+        self.model = nn.Sequential( \
+                nn.Linear(self.n_dim + self.t_dim, self.i_dim), \
+                nn.ReLU(), \
+                nn.Linear(self.i_dim, self.i_dim), \
+                nn.ReLU(), \
+                nn.Linear(self.i_dim, self.n_dim), \
+        )
 
     def forward(self, x, t):
         """
@@ -78,9 +93,7 @@ class DDPM(nn.Module):
         """
         t_embed = self.time_embed(t)
         x_and_t = torch.cat([x, t_embed], dim=-1)
-        relu_in = self.first_layer(x_and_t)
-        relu_out = self.relu_layer(relu_in)
-        noise_out = self.final_layer(relu_out)
+        noise_out = self.model(x_and_t)
         return noise_out
 
 class ConditionalDDPM():
