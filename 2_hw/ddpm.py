@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import torch
 import torch.utils
 import torch.utils.data
@@ -31,8 +32,13 @@ class NoiseScheduler():
 
         if type == "linear":
             self.init_linear_schedule(**kwargs)
+        elif type == "sigmoid":
+            self.init_sigmoid_schedule(**kwargs)
+        elif type == "cosine":
+            self.init_cosine_schedule(**kwargs)
         else:
-            raise NotImplementedError(f"{type} scheduler is not implemented") # change this if you implement additional schedulers
+            raise NotImplementedError(f"{type} scheduler is not implemented")
+        # change this if you implement additional schedulers
 
 
     def init_linear_schedule(self, beta_start, beta_end):
@@ -43,6 +49,31 @@ class NoiseScheduler():
         self.betas = torch.linspace(beta_start, beta_end, self.num_timesteps, dtype=torch.float32)
         # Lifted from the notebook, link below
         # https://colab.research.google.com/drive/1sjy9odlSSy0RBVgMTgP7s99NXsqglsUL?usp=sharing#scrollTo=qWw50ui9IZ5q
+        self.alphas = 1.0 - self.betas
+        self.alphas_cumprod = torch.cumprod(self.alphas, axis=0)
+        self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0)
+        self.sqrt_recip_alphas = torch.sqrt(1.0 / self.alphas)
+        self.sqrt_alphas_cumprod = torch.sqrt(self.alphas_cumprod)
+        self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - self.alphas_cumprod)
+        self.posterior_variance = self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
+        
+    def init_sigmoid_schedule(self, beta_start, beta_end, steepness=10):
+        t = torch.linspace(-steepness, steepness, self.num_timesteps)
+        self.betas = torch.sigmoid(t)  
+        self.betas = beta_start + (beta_end - beta_start) * self.betas  
+        
+        self.alphas = 1.0 - self.betas
+        self.alphas_cumprod = torch.cumprod(self.alphas, axis=0)
+        self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0)
+        self.sqrt_recip_alphas = torch.sqrt(1.0 / self.alphas)
+        self.sqrt_alphas_cumprod = torch.sqrt(self.alphas_cumprod)
+        self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - self.alphas_cumprod)
+        self.posterior_variance = self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
+        
+    def init_cosine_schedule(self, beta_start, beta_end):
+        t = torch.linspace(0, torch.pi / 2, self.num_timesteps)
+        self.betas = torch.cos(t) ** 2  
+        self.betas = beta_start + (beta_end - beta_start) * (1 - self.betas) 
         self.alphas = 1.0 - self.betas
         self.alphas_cumprod = torch.cumprod(self.alphas, axis=0)
         self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0)
@@ -62,26 +93,22 @@ class DDPM(nn.Module):
         Args:
             n_dim: int, the dimensionality of the data
             n_steps: int, the number of steps in the diffusion process
-        We have separate learnable modules for `time_embed` and `model`. `time_embed` can be learned or a fixed function as well
+        We have separate learnable modules for `time_embed` and `model`. 
+        `time_embed` can be learned or a fixed function as well
 
         """
         super(DDPM, self).__init__()
-        # Chosen: MLP with ReLU activation
+        # MLP with Leaky ReLU activation
         self.n_dim = n_dim
         self.n_steps = n_steps
         self.t_dim = self.n_dim # time dimension -- can be different
-        self.i_dim = self.n_dim # intermediate dimention -- for ReLU layer
-        # TODO: Set self.t_dim, self.i_dim
+        self.i_dim = self.n_dim # intermediate dimention -- for LeakyReLU layer
         self.time_embed = nn.Sequential( 
                 nn.Linear(1, self.t_dim), 
-                nn.ReLU(), 
-                nn.Linear(self.t_dim, self.t_dim) 
         )
         self.model = nn.Sequential( 
                 nn.Linear(self.n_dim + self.t_dim, self.i_dim), 
-                nn.ReLU(), 
-                nn.Linear(self.i_dim, self.i_dim), 
-                nn.ReLU(), 
+                nn.LeakyReLU(0.01),
                 nn.Linear(self.i_dim, self.n_dim), 
         )
 
@@ -100,7 +127,7 @@ class DDPM(nn.Module):
         return noise_out
 
 class ConditionalDDPM(nn.Module):
-    def __init(self, n_dim=3, y_dim=1, n_steps=200):
+    def __init__(self, n_dim=3, y_dim=1, n_steps=200):
         """
         Noise prediction network for the DDPM
 
@@ -108,26 +135,22 @@ class ConditionalDDPM(nn.Module):
             n_dim: int, the dimensionality of the data
             y_dim: int, the dimensionality of the condition
             n_steps: int, the number of steps in the diffusion process
-        We have separate learnable modules for `time_embed` and `model`. `time_embed` can be learned or a fixed function as well
+        We have separate learnable modules for `time_embed` and `model`. 
+        `time_embed` can be learned or a fixed function as well
 
         """
-        super(CoditionalDDPM, self).__init__()
+        super(ConditionalDDPM, self).__init__()
         self.n_dim = n_dim
         self.y_dim = y_dim
         self.n_steps = n_steps
         self.t_dim = self.n_dim
         self.i_dim = self.n_dim
-        # TODO: Set self.t_dim, self.i_dim
         self.time_embed = nn.Sequential(
                 nn.Linear(1, self.t_dim),
-                nn.ReLU(),
-                nn.Linear(self.t_dim, self.t_dim)
         )
         self.model = nn.Sequential(
                 nn.Linear(self.n_dim + self.y_dim + self.t_dim, self.i_dim),
-                nn.ReLU(),
-                nn.Linear(self.i_dim, self.i_dim),
-                nn.ReLU(),
+                nn.LeakyReLU(0.01),
                 nn.Linear(self.i_dim, self.n_dim),
         )
 
@@ -142,7 +165,8 @@ class ConditionalDDPM(nn.Module):
             torch.Tensor, the predicted noise tensor [batch_size, n_dim]
         """
         t_embed = self.time_embed(t.unsqueeze(-1).float())
-        x_y_t = torch.cat([x, y, t_embed], dim=-1)
+        y_embed = y.unsqueeze(-1).float()
+        x_y_t = torch.cat([x, y_embed, t_embed], dim=-1)
         noise_out = self.model(x_y_t)
         return noise_out
 
@@ -180,12 +204,11 @@ def train(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
     loss_fxn = nn.MSELoss()
     for epoch in range (epochs):
         total_loss = 0
-        for x, _ in dataloader:
+        for x in dataloader:
             optimizer.zero_grad()
+            x = x[0]
             t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
             noise = torch.randn_like(x)
-            # x_noisy = noise_scheduler.sqrt_alphas_cumprod[t.unsqueeze(1)] * x + \
-                    # noise_scheduler.sqrt_one_minus_alphas_cumprod[t.unsqueeze(1)] * noise
             x_noisy = noise_scheduler.sqrt_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * x + \
                     noise_scheduler.sqrt_one_minus_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * noise
 
@@ -217,15 +240,15 @@ def trainConditional(model, noise_scheduler, dataloader, optimizer, epochs, run_
             optimizer.zero_grad()
             t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
             noise = torch.randn_like(x)
-            x_noisy = noise_scheduler.sqrt_alphas_cumprod[t.unsqueeze(1)] * x + \
-                    noise_scheduler.sqrt_one_minus_alphas_cumprod[t.unsqueeze(1)] * noise
+            x_noisy = noise_scheduler.sqrt_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * x + \
+                    noise_scheduler.sqrt_one_minus_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * noise
             model_out = model(x_noisy, y, t)
             loss = loss_fxn(model_out, noise)
             loss.backward()
             optimizer.step()
             total_loss += loss
         # print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader)}")
-    torch.save(model.state_dict(), os.path.join(run_name, "model.pth"))
+    torch.save(model.state_dict(), os.path.join(run_name, "conditional_model.pth"))
 
 
 @torch.no_grad()
@@ -327,7 +350,8 @@ def sampleSVDD(model, n_samples, noise_scheduler, reward_scale, reward_fn):
         n_samples: int
         noise_scheduler: NoiseScheduler
         reward_scale: float
-        reward_fn: callable, takes in a batch of samples torch.Tensor:[n_samples, n_dim] and returns torch.Tensor[n_samples]
+        reward_fn: callable, takes in a batch of samples torch.Tensor:[n_samples, n_dim] and 
+                returns torch.Tensor[n_samples]
 
     Returns:
         torch.Tensor, samples from the model [n_samples, n_dim]
@@ -339,21 +363,22 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=['train', 'sample'], default='sample')
-    parser.add_argument("--n_steps", type=int, default=None)
-    parser.add_argument("--lbeta", type=float, default=None)
-    parser.add_argument("--ubeta", type=float, default=None)
-    parser.add_argument("--epochs", type=int, default=None)
-    parser.add_argument("--n_samples", type=int, default=None)
-    parser.add_argument("--batch_size", type=int, default=None)
-    parser.add_argument("--lr", type=float, default=None)
-    parser.add_argument("--dataset", type=str, default = None)
+    parser.add_argument("--n_steps", type=int, default=100)
+    parser.add_argument("--lbeta", type=float, default=0.001)
+    parser.add_argument("--ubeta", type=float, default=0.02)
+    parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--n_samples", type=int, default=8000)
+    parser.add_argument("--batch_size", type=int, default=100)
+    parser.add_argument("--lr", type=float, default=0.01)
+    parser.add_argument("--dataset", type=str, default = 'circles')
     parser.add_argument("--seed", type=int, default = 42)
-    parser.add_argument("--n_dim", type=int, default = None)
+    parser.add_argument("--n_dim", type=int, default = 2)
 
     args = parser.parse_args()
     utils.seed_everything(args.seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    run_name = f'exps/ddpm_{args.n_dim}_{args.n_steps}_{args.lbeta}_{args.ubeta}_{args.dataset}' # can include more hyperparams
+    run_name = f'exps/ddpm_{args.n_dim}_{args.n_steps}_{args.lbeta}_{args.ubeta}_{args.dataset}' 
+    # can include more hyperparams
     os.makedirs(run_name, exist_ok=True)
 
     model = DDPM(n_dim=args.n_dim, n_steps=args.n_steps)
@@ -367,7 +392,8 @@ if __name__ == "__main__":
         # can split the data into train and test -- for evaluation later
         data_X = data_X.to(device)
         data_y = data_y.to(device)
-        dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data_X, data_y), batch_size=args.batch_size, shuffle=True)
+        dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data_X, data_y),
+                batch_size=args.batch_size, shuffle=True)
         train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
 
     elif args.mode == 'sample':

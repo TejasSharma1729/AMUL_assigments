@@ -1,0 +1,220 @@
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 183, in train
+    for x, _ in dataloader:
+ValueError: not enough values to unpack (expected 2, got 1)
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 183, in train
+    for x, _ in dataloader:
+ValueError: not enough values to unpack (expected 2, got 1)
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 183, in train
+    for x, _ in dataloader:
+ValueError: not enough values to unpack (expected 2, got 1)
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 183, in train
+    for x, _ in dataloader:
+ValueError: not enough values to unpack (expected 2, got 1)
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 183, in train
+    for x, _ in dataloader:
+ValueError: not enough values to unpack (expected 2, got 1)
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 183, in train
+    for x, _ in dataloader:
+ValueError: not enough values to unpack (expected 2, got 1)
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 183, in train
+    for x, _ in dataloader:
+ValueError: not enough values to unpack (expected 2, got 1)
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 183, in train
+    for x, _ in dataloader:
+ValueError: not enough values to unpack (expected 2, got 1)
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 185, in train
+    t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
+AttributeError: 'list' object has no attribute 'size'
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 185, in train
+    t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
+AttributeError: 'list' object has no attribute 'size'
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 185, in train
+    t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
+AttributeError: 'list' object has no attribute 'size'
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 185, in train
+    t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
+AttributeError: 'list' object has no attribute 'size'
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 185, in train
+    t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
+AttributeError: 'list' object has no attribute 'size'
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 185, in train
+    t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
+AttributeError: 'list' object has no attribute 'size'
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 185, in train
+    t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
+AttributeError: 'list' object has no attribute 'size'
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 185, in train
+    t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
+AttributeError: 'list' object has no attribute 'size'
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 185, in train
+    t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
+AttributeError: 'list' object has no attribute 'size'
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
+Traceback (most recent call last):
+  File "ddpm.py", line 369, in <module>
+    train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+  File "ddpm.py", line 185, in train
+    t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
+AttributeError: 'list' object has no attribute 'size'
+Traceback (most recent call last):
+  File "ddpm.py", line 373, in <module>
+    model.to(device)
+  File "/users/ug22/mjain/miniconda3/envs/cs726env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for DDPM:
+	Missing key(s) in state_dict: "model.4.weight", "model.4.bias". 
