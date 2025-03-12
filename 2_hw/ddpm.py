@@ -80,8 +80,8 @@ class DDPM(nn.Module):
         self.model = nn.Sequential( 
                 nn.Linear(self.n_dim + self.t_dim, self.i_dim), 
                 nn.ReLU(), 
-                # nn.Linear(self.i_dim, self.i_dim), 
-                # nn.ReLU(), 
+                nn.Linear(self.i_dim, self.i_dim), 
+                nn.ReLU(), 
                 nn.Linear(self.i_dim, self.n_dim), 
         )
 
@@ -99,9 +99,54 @@ class DDPM(nn.Module):
         noise_out = self.model(x_and_t)
         return noise_out
 
-class ConditionalDDPM():
-    pass
-    
+class ConditionalDDPM(nn.Module):
+    def __init(self, n_dim=3, y_dim=1, n_steps=200):
+        """
+        Noise prediction network for the DDPM
+
+        Args:
+            n_dim: int, the dimensionality of the data
+            y_dim: int, the dimensionality of the condition
+            n_steps: int, the number of steps in the diffusion process
+        We have separate learnable modules for `time_embed` and `model`. `time_embed` can be learned or a fixed function as well
+
+        """
+        super(CoditionalDDPM, self).__init__()
+        self.n_dim = n_dim
+        self.y_dim = y_dim
+        self.n_steps = n_steps
+        self.t_dim = self.n_dim
+        self.i_dim = self.n_dim
+        # TODO: Set self.t_dim, self.i_dim
+        self.time_embed = nn.Sequential(
+                nn.Linear(1, self.t_dim),
+                nn.ReLU(),
+                nn.Linear(self.t_dim, self.t_dim)
+        )
+        self.model = nn.Sequential(
+                nn.Linear(self.n_dim + self.y_dim + self.t_dim, self.i_dim),
+                nn.ReLU(),
+                nn.Linear(self.i_dim, self.i_dim),
+                nn.ReLU(),
+                nn.Linear(self.i_dim, self.n_dim),
+        )
+
+    def forward(self, x, y, t):
+        """
+        Args:
+            x: torch.Tensor, the input data tensor [batch_size, n_dim]
+            y: torch.Tensor, the condition tensor [batch_size, y_dim]
+            t: torch.Tensor, the timestep tensor [batch_size]
+
+        Returns:
+            torch.Tensor, the predicted noise tensor [batch_size, n_dim]
+        """
+        t_embed = self.time_embed(t.unsqueeze(-1).float())
+        x_y_t = torch.cat([x, y, t_embed], dim=-1)
+        noise_out = self.model(x_y_t)
+        return noise_out
+
+
 class ClassifierDDPM():
     """
     ClassifierDDPM implements a classification algorithm using the DDPM model
@@ -149,6 +194,37 @@ def train(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
         # print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader)}")
     torch.save(model.state_dict(), os.path.join(run_name, "model.pth"))
 
+def trainConditional(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
+    """
+    Train the conditional model and save the model and necessary plots
+
+    Args:
+        model: ConditionalDDPM, model to train
+        noise_scheduler: NoiseScheduler, scheduler for the noise
+        dataloader: torch.utils.data.DataLoader, dataloader for the dataset
+        optimizer: torch.optim.Optimizer, optimizer to use
+        epochs: int, number of epochs to train the model
+        run_name: str, path to save the model
+    """
+    model.train()
+    loss_fxn = nn.MSELoss()
+    for epoch in range (epochs):
+        total_loss = 0
+        for x, y in dataloader:
+            optimizer.zero_grad()
+            t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
+            noise = torch.randn_like(x)
+            x_noisy = noise_scheduler.sqrt_alphas_cumprod[t.unsqueeze(1)] * x + \
+                    noise_scheduler.sqrt_one_minus_alphas_cumprod[t.unsqueeze(1)] * noise
+            model_out = model(x_noisy, y, t)
+            loss = loss_fxn(model_out, noise)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss
+        # print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader)}")
+    torch.save(model.state_dict(), os.path.join(run_name, "model.pth"))
+
+
 @torch.no_grad()
 def sample(model, n_samples, noise_scheduler, return_intermediate=False): 
     """
@@ -183,6 +259,41 @@ def sample(model, n_samples, noise_scheduler, return_intermediate=False):
         return x
     return x[0]
         
+@torch.no_grad()
+def sampleConditional(model, n_samples, noise_scheduler, class_labels, return_intermediate=False):
+    """
+    Sample from the conditional model
+    
+    Args:
+        model: ConditionalDDPM
+        n_samples: int
+        noise_scheduler: NoiseScheduler
+        class_labels: torch.Tensor, the class labels for the samples [n_samples, y_dim]
+
+    Returns:
+        torch.Tensor, samples from the model [n_samples, n_dim]
+
+    If `return_intermediate` is `False`,
+            torch.Tensor, samples from the model [n_samples, n_dim]
+    Else
+        the function returns all the intermediate steps in the diffusion process as well 
+        Return: [[n_samples, n_dim]] x n_steps
+        Optionally implement return_intermediate=True, will aid in visualizing the intermediate steps
+    """
+    model.eval()
+    x = [torch.randn(n_samples, model.n_dim) for _ in range (0, model.n_steps + 1)]
+    
+    for t in range(model.n_steps, 0, -1):
+        z = torch.randn(n_samples, model.n_dim)        
+        mu = (noise_scheduler.betas[t-1]) / (noise_scheduler.sqrt_one_minus_alphas_cumprod[t-1])
+        eps_theta = model.forward(x[t], class_labels, torch.Tensor([t] * n_samples).to(x[t].device))
+        x[t-1] = noise_scheduler.sqrt_recip_alphas[t-1] * (x[t] - mu * eps_theta) + \
+                torch.sqrt(noise_scheduler.posterior_variance[t-1]) * z
+
+    if (return_intermediate):
+        return x
+    return x[0]
+
 
 def sampleCFG(model, n_samples, noise_scheduler, guidance_scale, class_label):
     """
