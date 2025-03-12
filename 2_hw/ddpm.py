@@ -184,8 +184,11 @@ def train(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
             optimizer.zero_grad()
             t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
             noise = torch.randn_like(x)
-            x_noisy = noise_scheduler.sqrt_alphas_cumprod[t.unsqueeze(1)] * x + \
-                    noise_scheduler.sqrt_one_minus_alphas_cumprod[t.unsqueeze(1)] * noise
+            # x_noisy = noise_scheduler.sqrt_alphas_cumprod[t.unsqueeze(1)] * x + \
+                    # noise_scheduler.sqrt_one_minus_alphas_cumprod[t.unsqueeze(1)] * noise
+            x_noisy = noise_scheduler.sqrt_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * x + \
+                    noise_scheduler.sqrt_one_minus_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * noise
+
             model_out = model(x_noisy, t)
             loss = loss_fxn(model_out, noise)
             loss.backward()
@@ -246,16 +249,20 @@ def sample(model, n_samples, noise_scheduler, return_intermediate=False):
         Optionally implement return_intermediate=True, will aid in visualizing the intermediate steps
     """   
     model.eval()
-    x = [torch.randn(n_samples, model.n_dim) for _ in range (0, model.n_steps + 1)]
+    device = next(model.parameters()).device  # Get model's device
+    x = [torch.randn(n_samples, model.n_dim, device=device) for _ in range(0, model.n_steps + 1)]
     
     for t in range(model.n_steps, 0, -1):
-        z = torch.randn(n_samples, model.n_dim)
+        z = torch.randn(n_samples, model.n_dim, device=device)  # Ensure z is also on the same device
         mu = (noise_scheduler.betas[t-1]) / (noise_scheduler.sqrt_one_minus_alphas_cumprod[t-1])
-        eps_theta = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device))
-        x[t-1] = noise_scheduler.sqrt_recip_alphas[t-1] * (x[t] - mu * eps_theta) + \
-                torch.sqrt(noise_scheduler.posterior_variance[t-1]) * z
+
+        eps_theta = model.forward(x[t], torch.Tensor([t] * n_samples).to(device))  # Move to correct device
+        x[t-1] = (
+            noise_scheduler.sqrt_recip_alphas[t-1] * (x[t] - mu * eps_theta)
+            + torch.sqrt(noise_scheduler.posterior_variance[t-1]) * z
+        )
         
-    if (return_intermediate):
+    if return_intermediate:
         return x
     return x[0]
         
@@ -364,8 +371,28 @@ if __name__ == "__main__":
         train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
 
     elif args.mode == 'sample':
-        model.load_state_dict(torch.load(f'{run_name}/model.pth'))
-        samples = sample(model, args.n_samples, noise_scheduler)
+        model.to(device)
+        model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+
+        samples = sample(model, args.n_samples, noise_scheduler).to(device)
+
         torch.save(samples, f'{run_name}/samples_{args.seed}_{args.n_samples}.pth')
+
+        data_X, _ = dataset.load_dataset(args.dataset)
+        real_samples = data_X[:args.n_samples].to(device)
+
+        samples = samples.to(device)
+        real_samples = real_samples.to(device)
+        
+        real_samples = real_samples.to(device)
+        samples = samples.to(device)
+
+        # emd_score = utils.get_emd(real_samples.cpu().numpy(), samples.cpu().numpy())
+
+        # nll_score = utils.get_nll(real_samples, samples)
+        nll_score = utils.get_nll(real_samples.cpu(), samples.cpu())
+
+        print(nll_score)
+
     else:
         raise ValueError(f"Invalid mode {args.mode}")

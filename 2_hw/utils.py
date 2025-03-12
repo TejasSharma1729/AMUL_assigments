@@ -25,20 +25,36 @@ def get_nll(data, samples, temperature=1e-1):
     return -torch.log(get_likelihood(data, samples, temperature))
 
 def get_emd(d1, d2):
+    print("28")
     d_comb = np.concatenate((d1, d2), axis=0)
+    print("30")
     dist = np.linalg.norm((d_comb), axis=1).reshape((-1,1))
+    print("32")
     d1 = np.concatenate((np.zeros((d1.shape[0], 1)), d1), axis=1)
+    print("34")
     d2 = np.concatenate((np.ones((d2.shape[0], 1)), d2), axis=1)
+    print("36")
     d_comb = np.concatenate((d1, d2), axis=0)
+    print("38")
     app = np.concatenate((dist, d_comb), axis=1)
+    print("40")
     app = app[app[:, 0].argsort()]
+    print("42")
     d1_sig, d2_sig = 1 - app[:, 1], app[:, 1]
+    print("44")
     dist_sorted = app[:, 2:]
+    print("46")
     dist = cdist(dist_sorted, dist_sorted)
+    print("48")
     d1_sig = d1_sig.copy(order='C')
+    print("50")
     d2_sig = d2_sig.copy(order='C')
+    print("52")
     dist = dist.copy(order='C')
-    return emd(d1_sig, d2_sig, dist)
+    print("54")
+    ans = emd(d1_sig, d2_sig, dist)
+    print("56")
+    return ans
 
 def split_data(X, y, split_ratio=0.9):
     size = len(X)
