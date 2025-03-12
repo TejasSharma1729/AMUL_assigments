@@ -101,8 +101,9 @@ class DDPM(nn.Module):
         # MLP with Leaky ReLU activation
         self.n_dim = n_dim
         self.n_steps = n_steps
-        self.t_dim = self.n_dim # time dimension -- can be different
+        self.t_dim = 2 # time dimension -- a hyperparameter
         self.i_dim = self.n_dim # intermediate dimention -- for LeakyReLU layer
+        # intermediate dimention need not be same as n_dim, but we chose it to be same
         self.time_embed = nn.Sequential( 
                 nn.Linear(1, self.t_dim), 
         )
@@ -111,6 +112,8 @@ class DDPM(nn.Module):
                 nn.LeakyReLU(0.01),
                 nn.Linear(self.i_dim, self.n_dim), 
         )
+        # Reason for choice of LeakyReLU: it is a good choice for regression problems
+        # and it performed well in albatross dataset, but ReLU did not perform well.
 
     def forward(self, x, t):
         """
@@ -127,45 +130,50 @@ class DDPM(nn.Module):
         return noise_out
 
 class ConditionalDDPM(nn.Module):
-    def __init__(self, n_dim=3, y_dim=1, n_steps=200):
+    def __init__(self, n_dim=3, n_steps=200):
         """
         Noise prediction network for the DDPM
 
         Args:
             n_dim: int, the dimensionality of the data
-            y_dim: int, the dimensionality of the condition
             n_steps: int, the number of steps in the diffusion process
-        We have separate learnable modules for `time_embed` and `model`. 
-        `time_embed` can be learned or a fixed function as well
+        We have separate learnable modules for `class_embed`, time_embed` and `model`,
+        `class_embed` and `time_embed` can be learned or a fixed function as well
+        We assume class labels are integers, from 0 onward [-1 --> NULL case]
 
         """
         super(ConditionalDDPM, self).__init__()
         self.n_dim = n_dim
-        self.y_dim = y_dim
+        self.num_classes = 0 # To be updated during training, important.
         self.n_steps = n_steps
-        self.t_dim = self.n_dim
-        self.i_dim = self.n_dim
+        self.c_dim = 4 # class label dimension -- a hyperparameter
+        self.t_dim = 2 # time dimension -- a hyperparameter
+        self.i_dim = self.n_dim # intermediate dimention -- for LeakyReLU layer
+        self.class_embed = nn.Sequential(
+                nn.Linear(1, self.c_dim),
+        )
         self.time_embed = nn.Sequential(
                 nn.Linear(1, self.t_dim),
         )
         self.model = nn.Sequential(
-                nn.Linear(self.n_dim + self.y_dim + self.t_dim, self.i_dim),
+                nn.Linear(self.n_dim + self.c_dim + self.t_dim, self.i_dim),
                 nn.LeakyReLU(0.01),
                 nn.Linear(self.i_dim, self.n_dim),
         )
+        # Mostly same as normal DDPM, just added class label embedding
 
     def forward(self, x, y, t):
         """
         Args:
             x: torch.Tensor, the input data tensor [batch_size, n_dim]
-            y: torch.Tensor, the condition tensor [batch_size, y_dim]
+            y: torch.Tensor, the class label tensor [batch_size]
             t: torch.Tensor, the timestep tensor [batch_size]
 
         Returns:
             torch.Tensor, the predicted noise tensor [batch_size, n_dim]
         """
+        y_embed = self.class_embed(y.unsqueeze(-1).float())
         t_embed = self.time_embed(t.unsqueeze(-1).float())
-        y_embed = y.unsqueeze(-1).float()
         x_y_t = torch.cat([x, y_embed, t_embed], dim=-1)
         noise_out = self.model(x_y_t)
         return noise_out
@@ -177,16 +185,58 @@ class ClassifierDDPM():
     """
     
     def __init__(self, model: ConditionalDDPM, noise_scheduler: NoiseScheduler):
-        pass
+        self.model = model
+        self.noise_scheduler = noise_scheduler
 
     def __call__(self, x):
-        pass
+        # Just a wrapper around the predict function
+        return self.predict(x)
 
     def predict(self, x):
-        pass
+        """
+        Args:
+            x: torch.Tensor, the input data tensor [batch_size, n_dim]
+        Returns:
+            torch.Tensor, the predicted class labels [batch_size]
+        """
+        return self.predict_proba(x).argmax(axis=1)
+        # Just the class "y" with the highest probability, among all classes [computed]
 
     def predict_proba(self, x):
-        pass
+        """
+        Args:
+            x: torch.Tensor, the input data tensor [batch_size, n_dim]
+        Returns:
+            torch.Tensor, the predicted probabilities [batch_size, n_classes]
+        """
+        device = x.device
+        n_classes = self.model.num_classes
+        # Idea: for reasonable t, epsilon_theta (eta) predicts noise different for y_opt than -1
+        # and for different class y, prediction will be suboptimal (closer to for null case, y = -1)
+        # since during training (y, x_t, t) will not be seen together
+        sum_diffs = torch.zeros(x.size(0), n_classes, device=device)
+        # Idea: sample multiple (5) times and take the sum, so as to avoid random errors
+
+        for _ in range(5):
+            # The random timestamps will mostly be different for different samples
+            rand_times = torch.randint(0, self.noise_scheduler.num_timesteps // 2, (x.size(0),), device=device)
+            noise = torch.randn_like(x)
+            sqrt_abar = self.noise_scheduler.sqrt_alphas_cumprod.to(device)[rand_times.unsqueeze(1)]
+            sqrt_1_abar = self.noise_scheduler.sqrt_one_minus_alphas_cumprod.to(device)[rand_times.unsqueeze(1)]
+            x_t = sqrt_abar * x + sqrt_1_abar * noise
+
+            for c in range(n_classes):
+                y = torch.Tensor([c] * x.size(0)).to(device)
+                model_out = self.model(x_t, y, rand_times + 1)
+                model_null_out = self.model(x_noisy, -1 * torch.ones_like(y), rand_times + 1)
+
+                # Now update sum of differences for this timestamp and this classification.
+                sum_diffs[c] += torch.norm(model_out - model_null_out, dim=1)
+        
+        return F.softmax(sum_diffs, dim=1)
+        # Return: we need a function that converts these sums to probabilities, that sum to one
+        # and are proportional somewhat to sums. One option: naive sum (less sharp prediction).
+        # We picked softmax, since it is a good choice for classification problems.
 
 def train(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
     """
@@ -204,15 +254,14 @@ def train(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
     loss_fxn = nn.MSELoss()
     for epoch in range (epochs):
         total_loss = 0
-        for x in dataloader:
+        for x, _ in dataloader:
             optimizer.zero_grad()
-            x = x[0]
             t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
             noise = torch.randn_like(x)
             x_noisy = noise_scheduler.sqrt_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * x + \
                     noise_scheduler.sqrt_one_minus_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * noise
 
-            model_out = model(x_noisy, t)
+            model_out = model(x_noisy, t + 1)
             loss = loss_fxn(model_out, noise)
             loss.backward()
             optimizer.step()
@@ -233,6 +282,7 @@ def trainConditional(model, noise_scheduler, dataloader, optimizer, epochs, run_
         run_name: str, path to save the model
     """
     model.train()
+    all_classes = set()
     loss_fxn = nn.MSELoss()
     for epoch in range (epochs):
         total_loss = 0
@@ -242,12 +292,18 @@ def trainConditional(model, noise_scheduler, dataloader, optimizer, epochs, run_
             noise = torch.randn_like(x)
             x_noisy = noise_scheduler.sqrt_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * x + \
                     noise_scheduler.sqrt_one_minus_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * noise
-            model_out = model(x_noisy, y, t)
+
+            all_classes.update(y.tolist())
+            rand_nulls = torch.rand(y.shape, device=device) < 0.2 # 20% of the time, we set the value to -1
+            y[rand_nulls] = -1 # Set the value to -1, for NULL (unconditional training)
+
+            model_out = model(x_noisy, y, t + 1)
             loss = loss_fxn(model_out, noise)
             loss.backward()
             optimizer.step()
             total_loss += loss
         # print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader)}")
+    model.num_classes = len(all_classes)
     torch.save(model.state_dict(), os.path.join(run_name, "conditional_model.pth"))
 
 
@@ -280,17 +336,15 @@ def sample(model, n_samples, noise_scheduler, return_intermediate=False):
         mu = (noise_scheduler.betas[t-1]) / (noise_scheduler.sqrt_one_minus_alphas_cumprod[t-1])
 
         eps_theta = model.forward(x[t], torch.Tensor([t] * n_samples).to(device))  # Move to correct device
-        x[t-1] = (
-            noise_scheduler.sqrt_recip_alphas[t-1] * (x[t] - mu * eps_theta)
+        x[t-1] = noise_scheduler.sqrt_recip_alphas[t-1] * (x[t] - mu * eps_theta) \
             + torch.sqrt(noise_scheduler.posterior_variance[t-1]) * z
-        )
         
     if return_intermediate:
         return x
     return x[0]
         
 @torch.no_grad()
-def sampleConditional(model, n_samples, noise_scheduler, class_labels, return_intermediate=False):
+def sampleConditional(model, n_samples, noise_scheduler, class_label, return_intermediate=False):
     """
     Sample from the conditional model
     
@@ -298,7 +352,7 @@ def sampleConditional(model, n_samples, noise_scheduler, class_labels, return_in
         model: ConditionalDDPM
         n_samples: int
         noise_scheduler: NoiseScheduler
-        class_labels: torch.Tensor, the class labels for the samples [n_samples, y_dim]
+        class_label: int
 
     Returns:
         torch.Tensor, samples from the model [n_samples, n_dim]
@@ -314,8 +368,10 @@ def sampleConditional(model, n_samples, noise_scheduler, class_labels, return_in
     x = [torch.randn(n_samples, model.n_dim) for _ in range (0, model.n_steps + 1)]
     
     for t in range(model.n_steps, 0, -1):
-        z = torch.randn(n_samples, model.n_dim)        
+        z = torch.randn(n_samples, model.n_dim).to(x[t].device)    
         mu = (noise_scheduler.betas[t-1]) / (noise_scheduler.sqrt_one_minus_alphas_cumprod[t-1])
+        y = torch.Tensor([class_label] * n_samples).to(x[t].device)
+
         eps_theta = model.forward(x[t], class_labels, torch.Tensor([t] * n_samples).to(x[t].device))
         x[t-1] = noise_scheduler.sqrt_recip_alphas[t-1] * (x[t] - mu * eps_theta) + \
                 torch.sqrt(noise_scheduler.posterior_variance[t-1]) * z
@@ -324,7 +380,7 @@ def sampleConditional(model, n_samples, noise_scheduler, class_labels, return_in
         return x
     return x[0]
 
-
+@torch.no_grad()
 def sampleCFG(model, n_samples, noise_scheduler, guidance_scale, class_label):
     """
     Sample from the conditional model
@@ -339,7 +395,26 @@ def sampleCFG(model, n_samples, noise_scheduler, guidance_scale, class_label):
     Returns:
         torch.Tensor, samples from the model [n_samples, n_dim]
     """
-    pass
+    model.eval()
+    x = [torch.randn(n_samples, model.n_dim) for _ in range (0, model.n_steps + 1)]
+
+    for t in range(model.n_steps, 0, -1):
+        z = torch.randn(n_samples, model.n_dim).to(x[t].device)
+        mu = (noise_scheduler.betas[t-1]) / (noise_scheduler.sqrt_one_minus_alphas_cumprod[t-1])
+        y = torch.Tensor([class_label] * n_samples).to(x[t].device)
+        y0 = torch.Tensor([-1] * n_samples).to(x[t].device)
+
+        eps_theta = model.forward(x[t], y, torch.Tensor([t] * n_samples).to(x[t].device))
+        eps_theta0 = model.forward(x[t], y0, torch.Tensor([t] * n_samples).to(x[t].device))
+
+        cond_x = noise_scheduler.sqrt_recip_alphas[t-1] * (x[t] - mu * eps_theta) + \
+                torch.sqrt(noise_scheduler.posterior_variance[t-1]) * z
+        cond_x0 = noise_scheduler.sqrt_recip_alphas[t-1] * (x[t] - mu * eps_theta0) + \
+                torch.sqrt(noise_scheduler.posterior_variance[t-1]) * z
+        x[t-1] = (1 + guidance_scale) * cond_x - guidance_scale * cond_x0
+
+    return x[0]
+
 
 def sampleSVDD(model, n_samples, noise_scheduler, reward_scale, reward_fn):
     """
