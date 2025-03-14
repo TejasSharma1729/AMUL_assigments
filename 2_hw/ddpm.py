@@ -509,7 +509,7 @@ if __name__ == "__main__":
         # can split the data into train and test -- for evaluation later
         data_X = data_X.to(device)
         # data_y = data_y.to(device)
-        dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data_X),
+        dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data_X, data_y),
                 batch_size=args.batch_size, shuffle=True)
         train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
 
