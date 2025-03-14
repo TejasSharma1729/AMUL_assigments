@@ -13,13 +13,14 @@ import os
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 T = 100  
-beta_start = 0.001
-beta_end = 0.02
+beta_start = 0.005
+beta_end = 0.05
 n_dim = 64
 epochs = 30
+type = 'linear'
 
 model = DDPM(n_dim=n_dim, n_steps=T).to(device)
-model.load_state_dict(torch.load(f"exps/ddpm_{n_dim}_{T}_{beta_start}_{beta_end}_albatross/model.pth", \
+model.load_state_dict(torch.load(f"exps/ddpm_{n_dim}_{T}_{type}_{beta_start}_{beta_end}_albatross/model.pth", \
         map_location=device, weights_only=False))
 
 data_X, _= dataset.load_dataset("albatross")
@@ -31,7 +32,7 @@ with torch.no_grad():
     prior_samples = torch.tensor(np.load("data/albatross_prior_samples.npy"), dtype=torch.float32, device=device)
     n_samples = prior_samples.shape[0]
 
-    noise_scheduler = NoiseScheduler(num_timesteps=T, beta_start=beta_start, beta_end=beta_end)
+    noise_scheduler = NoiseScheduler(num_timesteps=T, beta_start=beta_start, beta_end=beta_end, type=type)
 
     device = next(model.parameters()).device 
     x = [torch.zeros_like(prior_samples) for _ in range(T + 1)]

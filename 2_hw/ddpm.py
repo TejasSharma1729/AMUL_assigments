@@ -45,10 +45,10 @@ class NoiseScheduler():
         """
         Precompute whatever quantities are required for training and sampling
         """
-
-        self.betas = torch.linspace(beta_start, beta_end, self.num_timesteps, dtype=torch.float32)
         # Lifted from the notebook, link below
         # https://colab.research.google.com/drive/1sjy9odlSSy0RBVgMTgP7s99NXsqglsUL?usp=sharing#scrollTo=qWw50ui9IZ5q
+
+        self.betas = torch.linspace(beta_start, beta_end, self.num_timesteps, dtype=torch.float32)
         self.alphas = 1.0 - self.betas
         self.alphas_cumprod = torch.cumprod(self.alphas, axis=0)
         self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0)
@@ -74,6 +74,7 @@ class NoiseScheduler():
         t = torch.linspace(0, torch.pi / 2, self.num_timesteps)
         self.betas = torch.cos(t) ** 2  
         self.betas = beta_start + (beta_end - beta_start) * (1 - self.betas) 
+
         self.alphas = 1.0 - self.betas
         self.alphas_cumprod = torch.cumprod(self.alphas, axis=0)
         self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0)
@@ -86,7 +87,7 @@ class NoiseScheduler():
         return self.num_timesteps
     
 class DDPM(nn.Module):
-    def __init__(self, n_dim=3, n_steps=200):
+    def __init__(self, n_dim=3, n_steps=100):
         """
         Noise prediction network for the DDPM
 
@@ -448,16 +449,17 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, default = 'circles')
     parser.add_argument("--seed", type=int, default = 42)
     parser.add_argument("--n_dim", type=int, default = 2)
+    parser.add_argument("--scheduler", choices=['linear', 'sigmoid', 'cosine'], default = 'linear')
 
     args = parser.parse_args()
     utils.seed_everything(args.seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    run_name = f'exps/ddpm_{args.n_dim}_{args.n_steps}_{args.lbeta}_{args.ubeta}_{args.dataset}' 
+    run_name = f'exps/ddpm_{args.n_dim}_{args.n_steps}_{args.scheduler}_{args.lbeta}_{args.ubeta}_{args.dataset}' 
     # can include more hyperparams
     os.makedirs(run_name, exist_ok=True)
 
     model = DDPM(n_dim=args.n_dim, n_steps=args.n_steps)
-    noise_scheduler = NoiseScheduler(num_timesteps=args.n_steps, beta_start=args.lbeta, beta_end=args.ubeta)
+    noise_scheduler = NoiseScheduler(num_timesteps=args.n_steps, beta_start=args.lbeta, beta_end=args.ubeta, type=args.scheduler)
     model = model.to(device)
 
     if args.mode == 'train':
@@ -466,8 +468,8 @@ if __name__ == "__main__":
         data_X, data_y = dataset.load_dataset(args.dataset)
         # can split the data into train and test -- for evaluation later
         data_X = data_X.to(device)
-        data_y = data_y.to(device)
-        dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data_X, data_y),
+        # data_y = data_y.to(device)
+        dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data_X),
                 batch_size=args.batch_size, shuffle=True)
         train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
 
