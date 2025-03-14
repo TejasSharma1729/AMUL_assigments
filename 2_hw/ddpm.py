@@ -13,6 +13,9 @@ import matplotlib.pyplot as plt
 
 from utils import gaussian_kernel, get_likelihood, get_nll, get_emd, split_data, sample
 
+import warnings
+warnings.simplefilter("ignore")
+
 class NoiseScheduler():
     """
     Noise scheduler for the DDPM model
