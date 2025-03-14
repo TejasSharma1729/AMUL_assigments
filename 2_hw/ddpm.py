@@ -334,7 +334,7 @@ def trainConditional(model, noise_scheduler, dataloader, optimizer, epochs, run_
             optimizer.step()
             total_loss += loss
         # print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader)}")
-    torch.save(model.state_dict(), os.path.join(run_name, "conditional_model.pth"))
+    torch.save(model.state_dict(), os.path.join(run_name, "model.pth"))
 
 
 @torch.no_grad()
@@ -486,6 +486,7 @@ if __name__ == "__main__":
     parser.add_argument("--ubeta", type=float, default=0.02)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--n_samples", type=int, default=8000)
+    parser.add_argument("--n_classes", type=int, default=2)
     parser.add_argument("--batch_size", type=int, default=100)
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--dataset", type=str, default = 'circles')
@@ -496,12 +497,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     utils.seed_everything(args.seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    run_name = f'exps/ddpm_{args.n_dim}_{args.n_steps}_{args.scheduler}_{args.lbeta}_{args.ubeta}_{args.dataset}' 
+    run_name = f'exps/conditional_ddpm_{args.n_dim}_{args.n_steps}_{args.scheduler}_{args.lbeta}_{args.ubeta}_{args.dataset}' 
     # can include more hyperparams
     os.makedirs(run_name, exist_ok=True)
 
-    model = DDPM(n_dim=args.n_dim, n_steps=args.n_steps)
-    noise_scheduler = NoiseScheduler(num_timesteps=args.n_steps, beta_start=args.lbeta, beta_end=args.ubeta, type=args.scheduler)
+    model = ConditionalDDPM(n_classes=n_classes, n_dim=args.n_dim, n_steps=args.n_steps)
+    noise_scheduler = NoiseScheduler(num_timesteps=args.n_steps, \
+            beta_start=args.lbeta, beta_end=args.ubeta, type=args.scheduler)
     model = model.to(device)
 
     if args.mode == 'train':
@@ -510,11 +512,11 @@ if __name__ == "__main__":
         data_X, data_y = dataset.load_dataset(args.dataset)
         # can split the data into train and test -- for evaluation later
         data_X = data_X.to(device)
-        # data_y = data_y.to(device)
-        dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data_X),
+        data_y = data_y.to(device)
+        dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data_X, data_y),
                 batch_size=args.batch_size, shuffle=True)
         print("Beginning training...")
-        train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+        trainConditional(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
 
     elif args.mode == 'sample':
         model.to(device)
