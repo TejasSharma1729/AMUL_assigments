@@ -18,8 +18,8 @@ num_gpus = 5  # There are 5 GPUs
 
 def run_experiment(params):
     """Runs a single experiment."""
-    dataset, size, n_dim, n_classes scheduler, lbeta, ubeta, n_step, lr, batch_size, gpu_id = params
-    results_file = f"results_{dataset}.csv"
+    dataset, size, n_dim, n_classes, scheduler, lbeta, ubeta, n_step, lr, batch_size, gpu_id = params
+    results_file = f"results_{dataset}_cond.csv"
 
     # Open CSV in append mode
     with open(results_file, "a", newline="") as f:
@@ -32,7 +32,7 @@ def run_experiment(params):
         print(f"Running on GPU {gpu_id}: {dataset}, {scheduler}, beta: {lbeta} {ubeta}, T: {n_step}, LR: {lr}, Batch: {batch_size}")
 
         cmd_train = (
-            f"CUDA_VISIBLE_DEVICES={gpu_id} python ddpm.py --mode train"
+            f"CUDA_VISIBLE_DEVICES={gpu_id} python ddpm.py --mode train "
             f"--dataset {dataset} --n_classes {n_classes} --epochs 30 --n_dim {n_dim} --n_samples {size} "
             f"--scheduler {scheduler} --batch_size {batch_size} --n_steps {n_step} "
             f"--lbeta {lbeta} --ubeta {ubeta} --lr {lr}"

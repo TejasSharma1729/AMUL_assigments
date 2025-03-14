@@ -162,9 +162,10 @@ class ConditionalDDPM(nn.Module):
 
         self.c_dim = min(n_classes, 8) # class label dimension -- a hyperparameter
         self.class_embed = nn.Sequential(
-                nn.Linear(self.n_classes, self.c_dim),
+                nn.Linear(self.n_classes + 1, self.c_dim),
         )
         # New: class embedding: we use one hot followed by linear.
+        # n_classes + 1 because y=n_classes is for NULL.
 
         self.t_sin_dim = 8 
         self.t_dim = 4 
@@ -190,7 +191,7 @@ class ConditionalDDPM(nn.Module):
         Returns:
             torch.Tensor, the predicted noise tensor [batch_size, n_dim]
         """
-        classes = F.one_hot(y.long(), num_classes=self.n_classes)
+        classes = F.one_hot(y.long(), num_classes=self.n_classes + 1)
         y_embed = self.class_embed(classes.float())
         # This is the new part. Class embedding.
 
@@ -325,8 +326,8 @@ def trainConditional(model, noise_scheduler, dataloader, optimizer, epochs, run_
             x_noisy = coeff_x * x + coeff_noise * noise
 
             rand_nulls = torch.rand(y.shape, device=device) < 0.2 
-            # 20% of the time, we set the value to -1. This is also a hyperparameter.
-            y[rand_nulls] = -1 # Set the value to -1, for NULL (unconditional training)
+            # 20% of the time, we set the value to n_classes. This is also a hyperparameter.
+            y[rand_nulls] = model.n_classes # Set the value to NULL (unconditional training)
 
             model_out = model(x_noisy, t + 1, y)
             loss = loss_fxn(model_out, noise)
@@ -436,7 +437,7 @@ def sampleCFG(model, n_samples, noise_scheduler, guidance_scale, class_label):
         z = torch.randn(n_samples, model.n_dim).to(x[t].device)
         mu = (noise_scheduler.betas[t-1]) / (noise_scheduler.sqrt_one_minus_alphas_cumprod[t-1])
         y = torch.Tensor([class_label] * n_samples).to(x[t].device)
-        y0 = torch.Tensor([-1] * n_samples).to(x[t].device)
+        y0 = torch.Tensor([model.n_classes] * n_samples).to(x[t].device)
 
         eps_theta = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device), y)
         eps_theta0 = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device), y0)
@@ -501,7 +502,7 @@ if __name__ == "__main__":
     # can include more hyperparams
     os.makedirs(run_name, exist_ok=True)
 
-    model = ConditionalDDPM(n_classes=n_classes, n_dim=args.n_dim, n_steps=args.n_steps)
+    model = ConditionalDDPM(n_classes=args.n_classes, n_dim=args.n_dim, n_steps=args.n_steps)
     noise_scheduler = NoiseScheduler(num_timesteps=args.n_steps, \
             beta_start=args.lbeta, beta_end=args.ubeta, type=args.scheduler)
     model = model.to(device)
