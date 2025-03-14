@@ -531,23 +531,18 @@ if __name__ == "__main__":
         data_X, data_y = dataset.load_dataset(args.dataset)
         real_samples = data_X[:args.n_samples].to(device)
         real_classes = data_y[:args.n_samples].to(device)
-        print(real_samples.shape, real_classes.shape)
-        assert 0
 
-        samples = sampleCFG(model, args.n_samples, noise_scheduler, args.guidance_scale, 0)
-        torch.save(samples, f'{run_name}/samples_{args.seed}_{args.n_samples}.pth')
+        real_samples_classwise = [real_samples[real_classes == c] for c in range(args.n_classes)]
+        samples_classwise = [sampleCFG(model, len(real_samples_classwise[c]), noise_scheduler, args.guidance_scale, c) for c in range(args.n_classes)]
 
-        samples = samples.to(device)
-        real_samples = real_samples.to(device)
-        
-        real_samples = real_samples.to(device)
-        samples = samples.to(device)
-
-        # emd_score = utils.get_emd(real_samples.cpu().numpy(), samples.cpu().numpy())
-
-        # nll_score = utils.get_nll(real_samples, samples)
-        nll_score = utils.get_nll(real_samples.cpu(), samples.cpu())
-
+        nll_scores = [0.0] * args.n_classes
+        for c in range(args.n_classes):
+            samples_classwise[c] = samples_classwise[c].to(device)
+            real_samples_classwise[c] = real_samples_classwise[c].to(device)
+            nll_scores[c] = utils.get_nll(real_samples_classwise[c], samples_classwise[c])
+            torch.save(samples_classwise[c], f'{run_name}/samples_{args.seed}_{args.n_samples}_class_{c}.pth')
+    
+        nll_score = sum(nll_scores) / args.n_classes
         print(nll_score)
 
     else:
