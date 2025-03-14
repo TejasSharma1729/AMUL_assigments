@@ -254,7 +254,7 @@ class ClassifierDDPM():
             for c in range(n_classes):
                 y = torch.Tensor([c] * x.size(0)).to(device)
                 model_out = self.model(x_t, y, rand_times + 1)
-                model_null_out = self.model(x_noisy, -1 * torch.ones_like(y), rand_times + 1)
+                model_null_out = self.model(x_t, model.n_classes * torch.ones_like(y), rand_times + 1)
 
                 # Now update sum of differences for this timestamp and this classification.
                 sum_diffs[c] += torch.norm(model_out - model_null_out, dim=1)
