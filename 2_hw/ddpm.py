@@ -280,7 +280,9 @@ def train(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
     loss_fxn = nn.MSELoss()
     for epoch in range (epochs):
         total_loss = 0
-        for x, _ in dataloader:
+        for x in dataloader:
+            if (type(x) == tuple or type(x) == list):
+                x = x[0]
             optimizer.zero_grad()
             t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
             noise = torch.randn_like(x)
@@ -509,8 +511,9 @@ if __name__ == "__main__":
         # can split the data into train and test -- for evaluation later
         data_X = data_X.to(device)
         # data_y = data_y.to(device)
-        dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data_X, data_y),
+        dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data_X),
                 batch_size=args.batch_size, shuffle=True)
+        print("Beginning training...")
         train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
 
     elif args.mode == 'sample':

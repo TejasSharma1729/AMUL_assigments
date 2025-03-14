@@ -12,9 +12,9 @@ import dataset
 import os
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-T = 100  
-beta_start = 0.005
-beta_end = 0.05
+T = 200  
+beta_start = 0.002
+beta_end = 0.2
 n_dim = 64
 epochs = 30
 type = 'linear'
