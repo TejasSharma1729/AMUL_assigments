@@ -102,12 +102,17 @@ class DDPM(nn.Module):
         # MLP with Leaky ReLU activation
         self.n_dim = n_dim
         self.n_steps = n_steps
-        self.t_dim = 2 # time dimension -- a hyperparameter
-        self.i_dim = self.n_dim # intermediate dimention -- for LeakyReLU layer
-        # intermediate dimention need not be same as n_dim, but we chose it to be same
+
+        self.t_sin_dim = 8 # time dimension -- a hyperparameter
+        self.t_dim = 4 # time embed dimension -- a hyperparameter
         self.time_embed = nn.Sequential( 
-                nn.Linear(1, self.t_dim), 
+                nn.Linear(2 * self.t_sin_dim, self.t_dim), 
         )
+        # Time architecture: sinusoidal embeddings of time --> Linear layer.
+        # Reference: https://arxiv.org/pdf/1706.03762
+        # 2 * self.t_sin_dim since we have sin and cos embeddings concatenated.
+
+        self.i_dim = 2 * self.n_dim # intermediate dimention -- for LeakyReLU layer
         self.model = nn.Sequential( 
                 nn.Linear(self.n_dim + self.t_dim, self.i_dim), 
                 nn.LeakyReLU(0.01),
@@ -125,13 +130,20 @@ class DDPM(nn.Module):
         Returns:
             torch.Tensor, the predicted noise tensor [batch_size, n_dim]
         """
-        t_embed = self.time_embed(t.unsqueeze(-1).float())
+        exponents = torch.arange(self.t_sin_dim, device=x.device).float() / self.t_sin_dim
+        freqs = self.n_steps ** (-exponents)
+        angles = t[:, None] * freqs[None]
+        # Architecture: we embed for frequencies 10000 ^ (i / d) for i in [0, d-1]
+        # We changed it to self.n_steps ** (-exponents) for better performance
+        t_sin = torch.cat([torch.sin(angles), torch.cos(angles)], dim=-1)
+        t_embed = self.time_embed(t_sin)
+
         x_and_t = torch.cat([x, t_embed], dim=-1)
         noise_out = self.model(x_and_t)
         return noise_out
 
 class ConditionalDDPM(nn.Module):
-    def __init__(self, n_dim=3, n_steps=200):
+    def __init__(self, n_classes=2, n_dim=3, n_steps=200):
         """
         Noise prediction network for the DDPM
 
@@ -144,18 +156,23 @@ class ConditionalDDPM(nn.Module):
 
         """
         super(ConditionalDDPM, self).__init__()
+        self.n_classes = n_classes
         self.n_dim = n_dim
-        self.num_classes = 0 # To be updated during training, important.
         self.n_steps = n_steps
-        self.c_dim = 4 # class label dimension -- a hyperparameter
-        self.t_dim = 2 # time dimension -- a hyperparameter
-        self.i_dim = self.n_dim # intermediate dimention -- for LeakyReLU layer
+
+        self.c_dim = min(n_classes, 8) # class label dimension -- a hyperparameter
         self.class_embed = nn.Sequential(
-                nn.Linear(1, self.c_dim),
+                nn.Linear(self.n_classes, self.c_dim),
         )
+        # New: class embedding: we use one hot followed by linear.
+
+        self.t_sin_dim = 8 
+        self.t_dim = 4 
         self.time_embed = nn.Sequential(
-                nn.Linear(1, self.t_dim),
+                nn.Linear(2 * self.t_sin_dim, self.t_dim),
         )
+
+        self.i_dim = 2 * self.n_dim 
         self.model = nn.Sequential(
                 nn.Linear(self.n_dim + self.c_dim + self.t_dim, self.i_dim),
                 nn.LeakyReLU(0.01),
@@ -163,7 +180,7 @@ class ConditionalDDPM(nn.Module):
         )
         # Mostly same as normal DDPM, just added class label embedding
 
-    def forward(self, x, y, t):
+    def forward(self, x, t, y):
         """
         Args:
             x: torch.Tensor, the input data tensor [batch_size, n_dim]
@@ -173,8 +190,16 @@ class ConditionalDDPM(nn.Module):
         Returns:
             torch.Tensor, the predicted noise tensor [batch_size, n_dim]
         """
-        y_embed = self.class_embed(y.unsqueeze(-1).float())
-        t_embed = self.time_embed(t.unsqueeze(-1).float())
+        classes = F.one_hot(y.long(), num_classes=self.n_classes)
+        y_embed = self.class_embed(classes.float())
+        # This is the new part. Class embedding.
+
+        exponents = torch.arange(self.t_sin_dim, device=x.device).float() / self.t_sin_dim
+        freqs = self.n_steps ** (-exponents)
+        angles = t[:, None] * freqs[None]
+        t_sin = torch.cat([torch.sin(angles), torch.cos(angles)], dim=-1)
+        t_embed = self.time_embed(t_sin)
+
         x_y_t = torch.cat([x, y_embed, t_embed], dim=-1)
         noise_out = self.model(x_y_t)
         return noise_out
@@ -211,7 +236,7 @@ class ClassifierDDPM():
             torch.Tensor, the predicted probabilities [batch_size, n_classes]
         """
         device = x.device
-        n_classes = self.model.num_classes
+        n_classes = self.model.n_classes
         # Idea: for reasonable t, epsilon_theta (eta) predicts noise different for y_opt than -1
         # and for different class y, prediction will be suboptimal (closer to for null case, y = -1)
         # since during training (y, x_t, t) will not be seen together
@@ -222,9 +247,9 @@ class ClassifierDDPM():
             # The random timestamps will mostly be different for different samples
             rand_times = torch.randint(0, self.noise_scheduler.num_timesteps // 2, (x.size(0),), device=device)
             noise = torch.randn_like(x)
-            sqrt_abar = self.noise_scheduler.sqrt_alphas_cumprod.to(device)[rand_times.unsqueeze(1)]
-            sqrt_1_abar = self.noise_scheduler.sqrt_one_minus_alphas_cumprod.to(device)[rand_times.unsqueeze(1)]
-            x_t = sqrt_abar * x + sqrt_1_abar * noise
+            coeff_x = self.noise_scheduler.sqrt_alphas_cumprod.to(device)[rand_times.unsqueeze(1)]
+            coeff_noise = self.noise_scheduler.sqrt_one_minus_alphas_cumprod.to(device)[rand_times.unsqueeze(1)]
+            x_t = coeff_x * x + coeff_noise * noise
 
             for c in range(n_classes):
                 y = torch.Tensor([c] * x.size(0)).to(device)
@@ -259,8 +284,10 @@ def train(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
             optimizer.zero_grad()
             t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
             noise = torch.randn_like(x)
-            x_noisy = noise_scheduler.sqrt_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * x + \
-                    noise_scheduler.sqrt_one_minus_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * noise
+
+            coeff_x = noise_scheduler.sqrt_alphas_cumprod.to(x.device)[t.unsqueeze(1)]
+            coeff_noise = noise_scheduler.sqrt_one_minus_alphas_cumprod.to(x.device)[t.unsqueeze(1)]
+            x_noisy = coeff_x * x + coeff_noise * noise
 
             model_out = model(x_noisy, t + 1)
             loss = loss_fxn(model_out, noise)
@@ -283,7 +310,6 @@ def trainConditional(model, noise_scheduler, dataloader, optimizer, epochs, run_
         run_name: str, path to save the model
     """
     model.train()
-    all_classes = set()
     loss_fxn = nn.MSELoss()
     for epoch in range (epochs):
         total_loss = 0
@@ -291,20 +317,21 @@ def trainConditional(model, noise_scheduler, dataloader, optimizer, epochs, run_
             optimizer.zero_grad()
             t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
             noise = torch.randn_like(x)
-            x_noisy = noise_scheduler.sqrt_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * x + \
-                    noise_scheduler.sqrt_one_minus_alphas_cumprod.to(x.device)[t.unsqueeze(1)] * noise
 
-            all_classes.update(y.tolist())
-            rand_nulls = torch.rand(y.shape, device=device) < 0.2 # 20% of the time, we set the value to -1
+            coeff_x = noise_scheduler.sqrt_alphas_cumprod.to(x.device)[t.unsqueeze(1)]
+            coeff_noise = noise_scheduler.sqrt_one_minus_alphas_cumprod.to(x.device)[t.unsqueeze(1)]
+            x_noisy = coeff_x * x + coeff_noise * noise
+
+            rand_nulls = torch.rand(y.shape, device=device) < 0.2 
+            # 20% of the time, we set the value to -1. This is also a hyperparameter.
             y[rand_nulls] = -1 # Set the value to -1, for NULL (unconditional training)
 
-            model_out = model(x_noisy, y, t + 1)
+            model_out = model(x_noisy, t + 1, y)
             loss = loss_fxn(model_out, noise)
             loss.backward()
             optimizer.step()
             total_loss += loss
         # print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader)}")
-    model.num_classes = len(all_classes)
     torch.save(model.state_dict(), os.path.join(run_name, "conditional_model.pth"))
 
 
@@ -335,10 +362,12 @@ def sample(model, n_samples, noise_scheduler, return_intermediate=False):
     for t in range(model.n_steps, 0, -1):
         z = torch.randn(n_samples, model.n_dim, device=device)  # Ensure z is also on the same device
         mu = (noise_scheduler.betas[t-1]) / (noise_scheduler.sqrt_one_minus_alphas_cumprod[t-1])
+        time = torch.Tensor([t] * n_samples).to(device)  # Move to correct device
 
-        eps_theta = model.forward(x[t], torch.Tensor([t] * n_samples).to(device))  # Move to correct device
-        x[t-1] = noise_scheduler.sqrt_recip_alphas[t-1] * (x[t] - mu * eps_theta) \
-            + torch.sqrt(noise_scheduler.posterior_variance[t-1]) * z
+        eps_theta = model.forward(x[t], time)
+        coeff_x = noise_scheduler.sqrt_recip_alphas[t-1]
+        coeff_noise = torch.sqrt(noise_scheduler.posterior_variance[t-1])
+        x[t-1] = coeff_x * (x[t] - mu * eps_theta) + coeff_noise * z
         
     if return_intermediate:
         return x
@@ -372,10 +401,12 @@ def sampleConditional(model, n_samples, noise_scheduler, class_label, return_int
         z = torch.randn(n_samples, model.n_dim).to(x[t].device)    
         mu = (noise_scheduler.betas[t-1]) / (noise_scheduler.sqrt_one_minus_alphas_cumprod[t-1])
         y = torch.Tensor([class_label] * n_samples).to(x[t].device)
+        time = torch.Tensor([t] * n_samples).to(x[t].device)
 
-        eps_theta = model.forward(x[t], class_labels, torch.Tensor([t] * n_samples).to(x[t].device))
-        x[t-1] = noise_scheduler.sqrt_recip_alphas[t-1] * (x[t] - mu * eps_theta) + \
-                torch.sqrt(noise_scheduler.posterior_variance[t-1]) * z
+        eps_theta = model.forward(x[t], time, y)
+        coeff_x = noise_scheduler.sqrt_recip_alphas[t-1]
+        coeff_noise = torch.sqrt(noise_scheduler.posterior_variance[t-1])
+        x[t-1] = coeff_x * (x[t] - mu * eps_theta) + coeff_noise * z
 
     if (return_intermediate):
         return x
@@ -405,13 +436,13 @@ def sampleCFG(model, n_samples, noise_scheduler, guidance_scale, class_label):
         y = torch.Tensor([class_label] * n_samples).to(x[t].device)
         y0 = torch.Tensor([-1] * n_samples).to(x[t].device)
 
-        eps_theta = model.forward(x[t], y, torch.Tensor([t] * n_samples).to(x[t].device))
-        eps_theta0 = model.forward(x[t], y0, torch.Tensor([t] * n_samples).to(x[t].device))
+        eps_theta = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device), y)
+        eps_theta0 = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device), y0)
+        coeff_x = noise_scheduler.sqrt_recip_alphas[t-1]
+        coeff_noise = torch.sqrt(noise_scheduler.posterior_variance[t-1])
 
-        cond_x = noise_scheduler.sqrt_recip_alphas[t-1] * (x[t] - mu * eps_theta) + \
-                torch.sqrt(noise_scheduler.posterior_variance[t-1]) * z
-        cond_x0 = noise_scheduler.sqrt_recip_alphas[t-1] * (x[t] - mu * eps_theta0) + \
-                torch.sqrt(noise_scheduler.posterior_variance[t-1]) * z
+        cond_x = coeff_x * (x[t] - mu * eps_theta) + coeff_noise * z
+        cond_x0 = coeff_x * (x[t] - mu * eps_theta0) + coeff_noise * z
         x[t-1] = (1 + guidance_scale) * cond_x - guidance_scale * cond_x0
 
     return x[0]
@@ -432,7 +463,16 @@ def sampleSVDD(model, n_samples, noise_scheduler, reward_scale, reward_fn):
     Returns:
         torch.Tensor, samples from the model [n_samples, n_dim]
     """
-    pass
+    model.eval()
+    x = [torch.randn(n_samples, model.n_dim) for _ in range (0, model.n_steps + 1)]
+
+    for t in range(model.n_steps, 0, -1):
+        y = torch.Tensor([-1] * n_samples).to(x[t].device)
+        eps_theta = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device), y)
+        rewards = reward_fn(eps_theta)
+        x[t-1] = x[t] + reward_scale * rewards.unsqueeze(1) * eps_theta
+
+    return x[0]
     
 
 if __name__ == "__main__":
