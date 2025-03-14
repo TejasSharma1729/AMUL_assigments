@@ -14,11 +14,13 @@ ubetas = [0.02, 0.1, 0.2]
 n_steps = [10, 50, 100, 150, 200]
 lrs = [0.1, 0.01]
 batch_sizes = [100, 200]
+guidance_scales = [0.2, 0.5, 0.8]
+reward_scales = [0.1, 0.5, 1.0]
 num_gpus = 5  # There are 5 GPUs
 
 def run_experiment(params):
     """Runs a single experiment."""
-    dataset, size, n_dim, n_classes, scheduler, lbeta, ubeta, n_step, lr, batch_size, gpu_id = params
+    dataset, size, n_dim, n_classes, scheduler, lbeta, ubeta, n_step, lr, batch_size, guidance_scale, reward_scale, gpu_id = params
     results_file = f"results_{dataset}_cond.csv"
 
     # Open CSV in append mode
@@ -27,15 +29,15 @@ def run_experiment(params):
         
         # Write header if file is empty
         if f.tell() == 0:
-            writer.writerow(["Dataset", "Scheduler", "Lbeta", "Ubeta", "Steps", "LR", "Batch Size", "NLL Score"])
+            writer.writerow(["Dataset", "Scheduler", "Lbeta", "Ubeta", "Steps", "LR", "Batch Size", "Guidance Scale", "NLL Score"])
 
         print(f"Running on GPU {gpu_id}: {dataset}, {scheduler}, beta: {lbeta} {ubeta}, T: {n_step}, LR: {lr}, Batch: {batch_size}")
 
         cmd_train = (
             f"CUDA_VISIBLE_DEVICES={gpu_id} python ddpm.py --mode train "
             f"--dataset {dataset} --n_classes {n_classes} --epochs 30 --n_dim {n_dim} --n_samples {size} "
-            f"--scheduler {scheduler} --batch_size {batch_size} --n_steps {n_step} "
-            f"--lbeta {lbeta} --ubeta {ubeta} --lr {lr}"
+            f"--scheduler {scheduler} --batch_size {batch_size} --n_steps {n_step} --reward_scale {reward_scale} "
+            f"--lbeta {lbeta} --ubeta {ubeta} --lr {lr} --guidance_scale {guidance_scale} "
         )
         
         cmd_sample = cmd_train.replace("train", "sample")
@@ -47,7 +49,7 @@ def run_experiment(params):
         nll_score = process.stdout.strip().split()[-1] if process.stdout else "N/A"
 
         # Write result to CSV
-        writer.writerow([dataset, scheduler, lbeta, ubeta, n_step, lr, batch_size, nll_score])
+        writer.writerow([dataset, scheduler, lbeta, ubeta, n_step, lr, batch_size, guidance_scale, reward_scale, nll_score])
         f.flush()  # Ensure immediate write
 
 def main():
@@ -57,11 +59,10 @@ def main():
     # Create all experiment configurations
     for dataset, size, n_dim, n_classes in zip(datasets, sizes, dimensions, num_classes):
         for scheduler, (lbeta, ubeta), n_step, lr, batch_size in itertools.product(
-            schedulers, zip(lbetas, ubetas), n_steps, lrs, batch_sizes
+            schedulers, zip(lbetas, ubetas), n_steps, lrs, batch_sizes, zip(guidance_scales, reward_scales)
         ):
             gpu_id = next(gpu_cycle)  # Assign GPU dynamically
-            all_params.append(\
-                    (dataset, size, n_dim, n_classes, scheduler, lbeta, ubeta, n_step, lr, batch_size, gpu_id))
+            all_params.append((dataset, size, n_dim, n_classes, scheduler, lbeta, ubeta, n_step, lr, batch_size, guidance_scale, reward_scale, gpu_id))
 
     # Use Pool with `processes=None` to use all available CPU cores
     with multiprocessing.Pool(processes=min(len(all_params), num_gpus * 4)) as pool:

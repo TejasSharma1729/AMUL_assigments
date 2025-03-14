@@ -493,6 +493,8 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, default = 'circles')
     parser.add_argument("--seed", type=int, default = 42)
     parser.add_argument("--n_dim", type=int, default = 2)
+    parser.add_argument("--guidance_scale", type=float, default=0.5)
+    parser.add_argument("--reward_scale", type=float, default=0.5)
     parser.add_argument("--scheduler", choices=['linear', 'sigmoid', 'cosine'], default = 'linear')
 
     args = parser.parse_args()
@@ -523,12 +525,14 @@ if __name__ == "__main__":
         model.to(device)
         model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
 
-        samples = sample(model, args.n_samples, noise_scheduler).to(device)
-
-        torch.save(samples, f'{run_name}/samples_{args.seed}_{args.n_samples}.pth')
-
-        data_X, _ = dataset.load_dataset(args.dataset)
+        data_X, data_y = dataset.load_dataset(args.dataset)
         real_samples = data_X[:args.n_samples].to(device)
+        real_classes = data_y[:args.n_samples].to(device)
+        print(real_samples.shape, real_classes.shape)
+        assert 0
+
+        samples = sampleCFG(model, args.n_samples, noise_scheduler, args.guidance_scale, 0)
+        torch.save(samples, f'{run_name}/samples_{args.seed}_{args.n_samples}.pth')
 
         samples = samples.to(device)
         real_samples = real_samples.to(device)
