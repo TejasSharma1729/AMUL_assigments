@@ -493,7 +493,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_classes", type=int, default=2)
     parser.add_argument("--batch_size", type=int, default=100)
     parser.add_argument("--lr", type=float, default=0.01)
-    parser.add_argument("--dataset", type=str, default = 'circles')
+    parser.add_argument("--dataset", type=str, default = 'moons')
     parser.add_argument("--seed", type=int, default = 42)
     parser.add_argument("--n_dim", type=int, default = 2)
     parser.add_argument("--guidance_scale", type=float, default=0.5)
@@ -544,6 +544,15 @@ if __name__ == "__main__":
     
         nll_score = sum(nll_scores) / args.n_classes
         print(nll_score)
+
+        plt.plot(samples_classwise[0][:, 0].cpu(), samples_classwise[0][:, 1].cpu(), 'ro', label='Class 0')
+        plt.plot(samples_classwise[1][:, 0].cpu(), samples_classwise[1][:, 1].cpu(), 'bo', label='Class 1')
+        plt.savefig(f'{run_name}/samples_{args.seed}_{args.n_samples}.png')
+        plt.show()
+        plt.plot(real_samples_classwise[0][:, 0].cpu(), real_samples_classwise[0][:, 1].cpu(), 'ro', label='Class 0')
+        plt.plot(real_samples_classwise[1][:, 0].cpu(), real_samples_classwise[1][:, 1].cpu(), 'bo', label='Class 1')
+        plt.savefig(f'{dataset}.png')
+        plt.show()
 
     else:
         raise ValueError(f"Invalid mode {args.mode}")
