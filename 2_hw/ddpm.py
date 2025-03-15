@@ -115,12 +115,15 @@ class DDPM(nn.Module):
         # Reference: https://arxiv.org/pdf/1706.03762
         # 2 * self.t_sin_dim since we have sin and cos embeddings concatenated.
 
-        self.i_dim = 2 * self.n_dim # intermediate dimention -- for LeakyReLU layer
+        self.i_dim = 4 * self.n_dim + 2 * self.t_dim
         self.model = nn.Sequential( 
                 nn.Linear(self.n_dim + self.t_dim, self.i_dim), 
-                nn.LeakyReLU(0.01),
+                nn.ReLU(),
+                nn.Linear(self.i_dim, self.i_dim),
+                nn.ReLU(),
                 nn.Linear(self.i_dim, self.n_dim), 
         )
+        # For albatross -- change it to one nn.LeakyReLU(0.01) layer. Try out more...
         # Reason for choice of LeakyReLU: it is a good choice for regression problems
         # and it performed well in albatross dataset, but ReLU did not perform well.
 
@@ -163,23 +166,26 @@ class ConditionalDDPM(nn.Module):
         self.n_dim = n_dim
         self.n_steps = n_steps
 
-        self.c_dim = min(n_classes, 8) # class label dimension -- a hyperparameter
+        self.c_dim = n_classes + 1 # class label dimension -- a hyperparameter
         self.class_embed = nn.Sequential(
                 nn.Linear(self.n_classes + 1, self.c_dim),
         )
         # New: class embedding: we use one hot followed by linear.
         # n_classes + 1 because y=n_classes is for NULL.
 
-        self.t_sin_dim = 8 
-        self.t_dim = 4 
+        self.t_sin_dim = 8
+        self.t_dim = 4 # time embed dimension -- a hyperparameter
         self.time_embed = nn.Sequential(
                 nn.Linear(2 * self.t_sin_dim, self.t_dim),
         )
 
-        self.i_dim = 2 * self.n_dim 
+        self.i_dim = 4 * self.n_dim + 2 * (self.c_dim + self.t_dim)
         self.model = nn.Sequential(
+                # nn.Linear(self.n_dim + self.c_dim + self.t_dim, self.i_dim),
                 nn.Linear(self.n_dim + self.c_dim + self.t_dim, self.i_dim),
-                nn.LeakyReLU(0.01),
+                nn.ReLU(),
+                nn.Linear(self.i_dim, self.i_dim),
+                nn.ReLU(),
                 nn.Linear(self.i_dim, self.n_dim),
         )
         # Mostly same as normal DDPM, just added class label embedding
@@ -205,6 +211,7 @@ class ConditionalDDPM(nn.Module):
         t_embed = self.time_embed(t_sin)
 
         x_y_t = torch.cat([x, y_embed, t_embed], dim=-1)
+        # x_y_t = torch.cat([x, classes.float(), t_sin], dim=-1)
         noise_out = self.model(x_y_t)
         return noise_out
 
@@ -285,8 +292,6 @@ def train(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
     for epoch in range (epochs):
         total_loss = 0
         for x in dataloader:
-            if (type(x) == tuple or type(x) == list):
-                x = x[0]
             optimizer.zero_grad()
             t = torch.randint(0, noise_scheduler.num_timesteps, (x.size(0),), device=x.device)
             noise = torch.randn_like(x)
@@ -300,7 +305,7 @@ def train(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
             loss.backward()
             optimizer.step()
             total_loss += loss
-        # print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader)}")
+        print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader)}")
     torch.save(model.state_dict(), os.path.join(run_name, "model.pth"))
 
 def trainConditional(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
@@ -484,18 +489,19 @@ def sampleSVDD(model, n_samples, noise_scheduler, reward_scale, reward_fn):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('--conditional', type=int, default=1)
     parser.add_argument("--mode", choices=['train', 'sample'], default='sample')
-    parser.add_argument("--n_steps", type=int, default=100)
-    parser.add_argument("--lbeta", type=float, default=0.001)
-    parser.add_argument("--ubeta", type=float, default=0.02)
+    parser.add_argument("--n_steps", type=int, default=200)
+    parser.add_argument("--lbeta", type=float, default=0.002)
+    parser.add_argument("--ubeta", type=float, default=0.2)
     parser.add_argument("--epochs", type=int, default=30)
-    parser.add_argument("--n_samples", type=int, default=8000)
+    parser.add_argument("--n_samples", type=int, default=32561)
     parser.add_argument("--n_classes", type=int, default=2)
     parser.add_argument("--batch_size", type=int, default=100)
     parser.add_argument("--lr", type=float, default=0.01)
-    parser.add_argument("--dataset", type=str, default = 'moons')
+    parser.add_argument("--dataset", type=str, default = 'albatross')
     parser.add_argument("--seed", type=int, default = 42)
-    parser.add_argument("--n_dim", type=int, default = 2)
+    parser.add_argument("--n_dim", type=int, default = 64)
     parser.add_argument("--guidance_scale", type=float, default=0.5)
     parser.add_argument("--reward_scale", type=float, default=0.5)
     parser.add_argument("--scheduler", choices=['linear', 'sigmoid', 'cosine'], default = 'linear')
@@ -503,6 +509,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     utils.seed_everything(args.seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+if  __name__ == "__main__" and args.conditional:
     run_name = f'exps/conditional_ddpm_{args.n_dim}_{args.n_steps}_{args.scheduler}_{args.lbeta}_{args.ubeta}_{args.dataset}' 
     # can include more hyperparams
     os.makedirs(run_name, exist_ok=True)
@@ -521,11 +529,9 @@ if __name__ == "__main__":
         data_y = data_y.to(device)
         dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data_X, data_y),
                 batch_size=args.batch_size, shuffle=True)
-        print("Beginning training...")
         trainConditional(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
 
     elif args.mode == 'sample':
-        model.to(device)
         model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
 
         data_X, data_y = dataset.load_dataset(args.dataset)
@@ -534,6 +540,7 @@ if __name__ == "__main__":
 
         real_samples_classwise = [real_samples[real_classes == c] for c in range(args.n_classes)]
         samples_classwise = [sampleCFG(model, len(real_samples_classwise[c]), noise_scheduler, args.guidance_scale, c) for c in range(args.n_classes)]
+        #samples_classwise = [sampleConditional(model, len(real_samples_classwise[c]), noise_scheduler, c) for c in range(args.n_classes)]
 
         nll_scores = [0.0] * args.n_classes
         for c in range(args.n_classes):
@@ -545,14 +552,52 @@ if __name__ == "__main__":
         nll_score = sum(nll_scores) / args.n_classes
         print(nll_score)
 
-        plt.plot(samples_classwise[0][:, 0].cpu(), samples_classwise[0][:, 1].cpu(), 'ro', label='Class 0')
-        plt.plot(samples_classwise[1][:, 0].cpu(), samples_classwise[1][:, 1].cpu(), 'bo', label='Class 1')
+        plt.clf()
+        colors = plt.get_cmap('tab10').colors
+        for c in range (args.n_classes):
+            plt.scatter(samples_classwise[c][:, 0].cpu(), samples_classwise[c][:, 1].cpu(), \
+                color=colors[c], label=f'Class {c}')
+        plt.legend()
+        plt.title('Generated Samples')
         plt.savefig(f'{run_name}/samples_{args.seed}_{args.n_samples}.png')
-        plt.show()
-        plt.plot(real_samples_classwise[0][:, 0].cpu(), real_samples_classwise[0][:, 1].cpu(), 'ro', label='Class 0')
-        plt.plot(real_samples_classwise[1][:, 0].cpu(), real_samples_classwise[1][:, 1].cpu(), 'bo', label='Class 1')
-        plt.savefig(f'{dataset}.png')
-        plt.show()
+        plt.clf()
+        for c in range (args.n_classes):
+            plt.scatter(real_samples_classwise[c][:, 0].cpu(), real_samples_classwise[c][:, 1].cpu(), \
+                color=colors[c], label=f'Class {c}')
+        plt.legend()
+        plt.title('Real Samples')
+        plt.savefig(f'{args.dataset}.png')
+        plt.clf()
 
+    else:
+        raise ValueError(f"Invalid mode {args.mode}")
+
+elif  __name__ == "__main__":
+    run_name = f'exps/ddpm_{args.n_dim}_{args.n_steps}_{args.scheduler}_{args.lbeta}_{args.ubeta}_{args.dataset}'
+    os.makedirs(run_name, exist_ok=True)
+    
+    model = DDPM(n_dim=args.n_dim, n_steps=args.n_steps)
+    noise_scheduler = NoiseScheduler(num_timesteps=args.n_steps, beta_start=args.lbeta, beta_end=args.ubeta, type=args.scheduler)
+    model = model.to(device)
+    
+    if args.mode == 'train':
+        epochs = args.epochs
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+        data_X, _ = dataset.load_dataset(args.dataset)
+        data_X = data_X.to(device)
+        dataloader = torch.utils.data.DataLoader(data_X, batch_size=args.batch_size, shuffle=True)
+        train(model, noise_scheduler, dataloader, optimizer, epochs, run_name)
+    
+    elif args.mode == 'sample':
+        model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+        samples = sample(model, args.n_samples, noise_scheduler)
+        torch.save(samples, f'{run_name}/samples_{args.seed}_{args.n_samples}.pth')
+        
+        real_samples, _ = dataset.load_dataset(args.dataset)
+        real_samples = real_samples.to(device)
+        
+        nll_score = utils.get_nll(real_samples[:args.n_samples], samples)
+        print(nll_score)
+    
     else:
         raise ValueError(f"Invalid mode {args.mode}")
