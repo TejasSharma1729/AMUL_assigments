@@ -58,7 +58,8 @@ def main():
 
     # Create all experiment configurations
     for dataset, size, n_dim, n_classes in zip(datasets, sizes, dimensions, num_classes):
-        for scheduler, (lbeta, ubeta), n_step, lr, batch_size in itertools.product(
+        for scheduler, (lbeta, ubeta), n_step, lr, batch_size, (guidance_scale, reward_scale) in \
+        itertools.product(
             schedulers, zip(lbetas, ubetas), n_steps, lrs, batch_sizes, zip(guidance_scales, reward_scales)
         ):
             gpu_id = next(gpu_cycle)  # Assign GPU dynamically
