@@ -4,9 +4,9 @@ import subprocess
 import multiprocessing
 import csv
 
-datasets = ['moons']
-sizes = [8000]
-dimensions = [2]
+datasets = ['moons', 'blobs', 'circles', 'manycircles', 'helix']
+sizes = [8000, 8000, 8000, 8000, 10000]
+dimensions = [2, 2, 2, 2, 3]
 schedulers = ['linear', 'sigmoid', 'cosine']
 lbetas = [0.005]
 ubetas = [0.05]
@@ -32,7 +32,7 @@ def run_experiment(dataset, size, n_dim, gpu_id):
             print(f"Running: {dataset}, {scheduler}, beta: {lbeta} {ubeta}, T: {n_step}, LR: {lr}, Batch: {batch_size}")
 
             cmd_train = (
-                f"CUDA_VISIBLE_DEVICES=1 python ddpm.py "
+                f"CUDA_VISIBLE_DEVICES=1 python ddpm.py --conditional 0 "
                 f"--dataset {dataset} --mode train --epochs 30 --n_dim {n_dim} --n_samples {size} "
                 f"--scheduler {scheduler} --batch_size {batch_size} --n_steps {n_step} "
                 f"--lbeta {lbeta} --ubeta {ubeta} --lr {lr}"

@@ -8,14 +8,14 @@ datasets = ['moons', 'circles', 'manycircles', 'blobs', 'helix']
 sizes = [8000, 8000, 8000, 8000, 10000]
 dimensions = [2, 2, 2, 2, 3]
 num_classes = [2, 2, 8, 2, 2]
-schedulers = ['linear', 'sigmoid', 'cosine']
-lbetas = [0.001, 0.005, 0.01]
-ubetas = [0.02, 0.1, 0.2]
-n_steps = [10, 50, 100, 150, 200]
-lrs = [0.1, 0.01]
-batch_sizes = [100, 200]
-guidance_scales = [0.2, 0.5, 0.8]
-reward_scales = [0.1, 0.5, 1.0]
+schedulers = ['linear', 'sigmoid', 'cosine'] # To update
+lbetas = [0.005]
+ubetas = [0.05]
+n_steps = [10, 50, 100, 150, 200] # To update
+lrs = [0.05]
+batch_sizes = [100]
+guidance_scales = [0.2, 0,3, 0.5, 0.8, 1.0]
+reward_scales = [0.5] # To keep for part 3
 num_gpus = 5  # There are 5 GPUs
 
 def run_experiment(params):
@@ -29,7 +29,7 @@ def run_experiment(params):
         
         # Write header if file is empty
         if f.tell() == 0:
-            writer.writerow(["Dataset", "Scheduler", "Lbeta", "Ubeta", "Steps", "LR", "Batch Size", "Guidance Scale", "NLL Score"])
+            writer.writerow(["Dataset", "Scheduler", "Lbeta", "Ubeta", "Steps", "LR", "Batch Size", "Guidance Scale", "NLL Score", "Accuracy"])
 
         print(f"Running on GPU {gpu_id}: {dataset}, {scheduler}, beta: {lbeta} {ubeta}, T: {n_step}, LR: {lr}, Batch: {batch_size}")
 
@@ -39,17 +39,20 @@ def run_experiment(params):
             f"--scheduler {scheduler} --batch_size {batch_size} --n_steps {n_step} --reward_scale {reward_scale} "
             f"--lbeta {lbeta} --ubeta {ubeta} --lr {lr} --guidance_scale {guidance_scale} "
         )
-        
-        cmd_sample = cmd_train.replace("train", "sample")
-
         subprocess.run(cmd_train, shell=True)
-        process = subprocess.run(cmd_sample, shell=True, capture_output=True, text=True)
-
+        
         # Extract NLL score (Modify parsing based on output format)
+        cmd_sample = cmd_train.replace("train", "sample")
+        process = subprocess.run(cmd_sample, shell=True, capture_output=True, text=True)
         nll_score = process.stdout.strip().split()[-1] if process.stdout else "N/A"
 
+        # Extract Classification
+        cmd_classify = cmd_train.replace("train", "classify")
+        process = subprocess.run(cmd_classify, shell=True, capture_output=True, text=True)
+        accuracy = process.stdout.strip().split()[-1] if process.stdout else "N/A"
+
         # Write result to CSV
-        writer.writerow([dataset, scheduler, lbeta, ubeta, n_step, lr, batch_size, guidance_scale, reward_scale, nll_score])
+        writer.writerow([dataset, scheduler, lbeta, ubeta, n_step, lr, batch_size, guidance_scale, reward_scale, nll_score, accuracy])
         f.flush()  # Ensure immediate write
 
 def main():

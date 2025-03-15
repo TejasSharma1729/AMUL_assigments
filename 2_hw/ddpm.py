@@ -490,7 +490,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--conditional', type=int, default=1)
-    parser.add_argument("--mode", choices=['train', 'sample'], default='sample')
+    parser.add_argument("--mode", choices=['train', 'sample', 'classify'], default='sample')
     parser.add_argument("--n_steps", type=int, default=200)
     parser.add_argument("--lbeta", type=float, default=0.002)
     parser.add_argument("--ubeta", type=float, default=0.2)
@@ -550,7 +550,7 @@ if  __name__ == "__main__" and args.conditional:
             torch.save(samples_classwise[c], f'{run_name}/samples_{args.seed}_{args.n_samples}_class_{c}.pth')
     
         nll_score = sum(nll_scores) / args.n_classes
-        print(nll_score)
+        print(float(nll_score))
 
         plt.clf()
         colors = plt.get_cmap('tab10').colors
@@ -569,6 +569,17 @@ if  __name__ == "__main__" and args.conditional:
         plt.savefig(f'{args.dataset}.png')
         plt.clf()
 
+    elif args.mode == 'classify':
+        model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
+        
+        data_X, data_y = dataset.load_dataset(args.dataset)
+        real_samples = data_X[:args.n_samples].to(device)
+        real_classes = data_y[:args.n_samples].to(device)
+        classifier = ClassifierDDPM(model, noise_scheduler)
+        pred_classes = classifier(real_samples)
+        accuracy = (pred_classes == real_classes).float().mean()
+        print(float(accuracy))
+
     else:
         raise ValueError(f"Invalid mode {args.mode}")
 
@@ -577,7 +588,7 @@ elif  __name__ == "__main__":
     os.makedirs(run_name, exist_ok=True)
     
     model = DDPM(n_dim=args.n_dim, n_steps=args.n_steps)
-    noise_scheduler = NoiseScheduler(num_timesteps=args.n_steps, beta_start=args.lbeta, beta_end=args.ubeta, type=args.scheduler)
+    noise_scheduler = NoiseScheduler(num_timesteps=args.n_steps, beta_start=args.lbeta, beta_end=args.ubeta,  type=args.scheduler)
     model = model.to(device)
     
     if args.mode == 'train':
@@ -597,7 +608,7 @@ elif  __name__ == "__main__":
         real_samples = real_samples.to(device)
         
         nll_score = utils.get_nll(real_samples[:args.n_samples], samples)
-        print(nll_score)
+        print(float(nll_score))
     
     else:
         raise ValueError(f"Invalid mode {args.mode}")

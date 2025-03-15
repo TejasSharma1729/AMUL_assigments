@@ -4,20 +4,20 @@ import subprocess
 import multiprocessing
 import csv
 
-datasets = ['moons', 'circles', 'manycircles', 'blobs', 'helix']
-sizes = [8000, 8000, 8000, 8000, 10000]
-dimensions = [2, 2, 2, 2, 3]
+datasets = ['albatross']
+sizes = [32561]
+dimensions = [64]
 schedulers = ['linear', 'sigmoid', 'cosine']
-lbetas = [0.001, 0.005, 0.01]
-ubetas = [0.02, 0.1, 0.2]
+lbetas = [0.002]
+ubetas = [0.02]
 n_steps = [10, 50, 100, 150, 200]
-lrs = [0.1, 0.01]
-batch_sizes = [100, 200]
+lrs = [0.02]
+batch_sizes = [100]
 num_gpus = 5  # There are 5 GPUs
 
 def run_experiment(params):
     """Runs a single experiment."""
-    dataset, size, n_dim, scheduler, lbeta, ubeta, n_step, lr, batch_size, gpu_id = params
+    dataset, size, n_dim, scheduler, lbeta, ubeta, n_step, lr, batch_size = params
     results_file = f"results_{dataset}.csv"
 
     # Open CSV in append mode
@@ -28,10 +28,10 @@ def run_experiment(params):
         if f.tell() == 0:
             writer.writerow(["Dataset", "Scheduler", "Lbeta", "Ubeta", "Steps", "LR", "Batch Size", "NLL Score"])
 
-        print(f"Running on GPU {gpu_id}: {dataset}, {scheduler}, beta: {lbeta} {ubeta}, T: {n_step}, LR: {lr}, Batch: {batch_size}")
+        print(f"Running on CPU: {dataset}, {scheduler}, beta: {lbeta} {ubeta}, T: {n_step}, LR: {lr}, Batch: {batch_size}")
 
         cmd_train = (
-            f"CUDA_VISIBLE_DEVICES={gpu_id} python ddpm.py "
+            f"CUDA_VISIBLE_DEVICES=-1 python ddpm.py --conditional 0 "
             f"--dataset {dataset} --mode train --epochs 30 --n_dim {n_dim} --n_samples {size} "
             f"--scheduler {scheduler} --batch_size {batch_size} --n_steps {n_step} "
             f"--lbeta {lbeta} --ubeta {ubeta} --lr {lr}"
@@ -50,20 +50,20 @@ def run_experiment(params):
         f.flush()  # Ensure immediate write
 
 def main():
-    all_params = []
-    gpu_cycle = itertools.cycle(range(num_gpus))  # Cycle through GPUs dynamically
+    # all_params = []
+    # gpu_cycle = itertools.cycle(range(num_gpus))  # Cycle through GPUs dynamically
 
     # Create all experiment configurations
     for dataset, size, n_dim in zip(datasets, sizes, dimensions):
         for scheduler, (lbeta, ubeta), n_step, lr, batch_size in itertools.product(
             schedulers, zip(lbetas, ubetas), n_steps, lrs, batch_sizes
         ):
-            gpu_id = next(gpu_cycle)  # Assign GPU dynamically
-            all_params.append((dataset, size, n_dim, scheduler, lbeta, ubeta, n_step, lr, batch_size, gpu_id))
+            params = ((dataset, size, n_dim, scheduler, lbeta, ubeta, n_step, lr, batch_size))
+            run_experiment(params)
 
     # Use Pool with `processes=None` to use all available CPU cores
-    with multiprocessing.Pool(processes=min(len(all_params), num_gpus * 4)) as pool:
-        pool.map(run_experiment, all_params)
+    # with multiprocessing.Pool(processes=None) as pool:
+    #     pool.map(run_experiment, all_params)
 
 if __name__ == "__main__":
     main()
