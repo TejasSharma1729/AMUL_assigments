@@ -406,7 +406,8 @@ def sampleConditional(model, n_samples, noise_scheduler, class_label, return_int
         Optionally implement return_intermediate=True, will aid in visualizing the intermediate steps
     """
     model.eval()
-    x = [torch.randn(n_samples, model.n_dim) for _ in range (0, model.n_steps + 1)]
+    device = next(model.parameters()).device
+    x = [torch.randn(n_samples, model.n_dim).to(device) for _ in range (0, model.n_steps + 1)]
     
     for t in range(model.n_steps, 0, -1):
         z = torch.randn(n_samples, model.n_dim).to(x[t].device)    
@@ -438,7 +439,8 @@ def sampleCFG(model, n_samples, noise_scheduler, guidance_scale, class_label):
         torch.Tensor, samples from the model [n_samples, n_dim]
     """
     model.eval()
-    x = [torch.randn(n_samples, model.n_dim) for _ in range (0, model.n_steps + 1)]
+    device = next(model.parameters()).device
+    x = [torch.randn(n_samples, model.n_dim).to(device) for _ in range (0, model.n_steps + 1)]
 
     with torch.no_grad():
         for t in range(model.n_steps, 0, -1):
@@ -475,7 +477,8 @@ def sampleSVDD(model, n_samples, noise_scheduler, reward_scale, reward_fn):
         torch.Tensor, samples from the model [n_samples, n_dim]
     """
     model.eval()
-    x = [torch.randn(n_samples, model.n_dim) for _ in range (0, model.n_steps + 1)]
+    device = next(model.parameters()).device
+    x = [torch.randn(n_samples, model.n_dim).to(device) for _ in range (0, model.n_steps + 1)]
     
     with torch.no_grad():
         for t in range(model.n_steps, 0, -1):
@@ -491,7 +494,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--conditional', type=int, default=1)
-    parser.add_argument("--mode", choices=['train', 'sample', 'classify'], default='classify')
+    parser.add_argument("--mode", choices=['train', 'sample', 'classify'], default='sample')
     parser.add_argument("--n_steps", type=int, default=100)
     parser.add_argument("--lbeta", type=float, default=0.001)
     parser.add_argument("--ubeta", type=float, default=0.02)
@@ -509,7 +512,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     utils.seed_everything(args.seed)
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = 'mps' if torch.mps.is_available() else 'cpu'
 
 if  __name__ == "__main__" and args.conditional:
     run_name = f'exps/conditional_ddpm_{args.n_dim}_{args.n_steps}_{args.scheduler}_{args.lbeta}_{args.ubeta}_{args.dataset}' 
@@ -547,7 +550,7 @@ if  __name__ == "__main__" and args.conditional:
         for c in range(args.n_classes):
             samples_classwise[c] = samples_classwise[c].to(device)
             real_samples_classwise[c] = real_samples_classwise[c].to(device)
-            nll_scores[c] = utils.get_nll(real_samples_classwise[c], samples_classwise[c])
+            nll_scores[c] = utils.get_nll(real_samples_classwise[c].to('cpu'), samples_classwise[c].to('cpu'))
             torch.save(samples_classwise[c], f'{run_name}/samples_{args.seed}_{args.n_samples}_class_{c}.pth')
     
         nll_score = sum(nll_scores) / args.n_classes
@@ -610,7 +613,7 @@ elif  __name__ == "__main__":
         real_samples, _ = dataset.load_dataset(args.dataset)
         real_samples = real_samples.to(device)
         
-        nll_score = utils.get_nll(real_samples[:args.n_samples], samples)
+        nll_score = utils.get_nll(real_samples[:args.n_samples].to('cpu'), samples.to('cpu'))
         print(float(nll_score))
     
     else:

@@ -13,9 +13,8 @@ ubetas = [0.02]
 n_steps = [10, 50, 100, 150, 200]
 lrs = [0.01]
 batch_sizes = [100]
-num_gpus = 5
 
-def run_experiment(dataset, size, n_dim, gpu_id):
+def run_experiment(dataset, size, n_dim):
     results_file = f"results_{dataset}.csv"
     
     # Open CSV file in append mode
@@ -32,7 +31,7 @@ def run_experiment(dataset, size, n_dim, gpu_id):
             print(f"Running: {dataset}, {scheduler}, beta: {lbeta} {ubeta}, T: {n_step}, LR: {lr}, Batch: {batch_size}")
 
             cmd_train = (
-                f"CUDA_VISIBLE_DEVICES=1 python ddpm.py --conditional 0 "
+                f"python ddpm.py --conditional 0 "
                 f"--dataset {dataset} --mode train --epochs 30 --n_dim {n_dim} --n_samples {size} "
                 f"--scheduler {scheduler} --batch_size {batch_size} --n_steps {n_step} "
                 f"--lbeta {lbeta} --ubeta {ubeta} --lr {lr}"
@@ -53,7 +52,7 @@ def run_experiment(dataset, size, n_dim, gpu_id):
 def main():
     processes = []
     for gpu_id, (dataset, size, n_dim) in enumerate(zip(datasets, sizes, dimensions), start=0):  # Start from 0
-        p = multiprocessing.Process(target=run_experiment, args=(dataset, size, n_dim, gpu_id))
+        p = multiprocessing.Process(target=run_experiment, args=(dataset, size, n_dim))
         processes.append(p)
         p.start()
     
