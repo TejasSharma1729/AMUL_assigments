@@ -551,7 +551,7 @@ if __name__ == "__main__":
     device = 'mps' if torch.mps.is_available() else 'cpu'
 
 if  __name__ == "__main__" and args.conditional:
-    run_name = f'exps/conditional_ddpm_{args.n_dim}_{args.n_steps}_{args.scheduler}_{args.lbeta}_{args.ubeta}_{args.dataset}' 
+    run_name = f'exps/{args.dataset}_conditional_{args.guidance_scale}_{args.lr}_{args.n_steps}_{args.scheduler}_{args.lbeta}_{args.ubeta}' 
     # can include more hyperparams
     os.makedirs(run_name, exist_ok=True)
 
@@ -628,7 +628,7 @@ if  __name__ == "__main__" and args.conditional:
         raise ValueError(f"Invalid mode {args.mode}")
 
 elif  __name__ == "__main__":
-    run_name = f'exps/ddpm_{args.n_dim}_{args.n_steps}_{args.scheduler}_{args.lbeta}_{args.ubeta}_{args.dataset}'
+    run_name = f'exps/{args.dataset}_ddpm_{args.lr}_{args.n_steps}_{args.scheduler}_{args.lbeta}_{args.ubeta}'
     os.makedirs(run_name, exist_ok=True)
     
     model = DDPM(n_dim=args.n_dim, n_steps=args.n_steps)

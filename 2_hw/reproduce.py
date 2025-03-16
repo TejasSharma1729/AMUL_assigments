@@ -12,15 +12,16 @@ import dataset
 import os
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-T = 200  
-beta_start = 0.002
-beta_end = 0.2
+T = 100  
+beta_start = 0.001
+beta_end = 0.02
 n_dim = 64
-epochs = 30
+epochs = 100
+lr = 0.01
 type = 'linear'
 
 model = DDPM(n_dim=n_dim, n_steps=T).to(device)
-model.load_state_dict(torch.load(f"exps/ddpm_{n_dim}_{T}_{type}_{beta_start}_{beta_end}_albatross/model.pth", \
+model.load_state_dict(torch.load(f"exps/albatross_ddpm_{lr}_{T}_{type}_{beta_start}_{beta_end}/model.pth", \
         map_location=device, weights_only=False))
 
 data_X, _= dataset.load_dataset("albatross")

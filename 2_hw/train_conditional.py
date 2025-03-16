@@ -14,13 +14,13 @@ ubetas = [0.02]
 n_steps = [100] # To update
 lrs = [0.01]
 batch_sizes = [100]
-guidance_scales = [0.2, 0,3, 0.5, 0.8, 1.0]
+guidance_scales = [0.2, 0.3, 0.5, 0.8, 1.0]
 reward_scales = [0.2, 0.3, 0.5, 0.8, 1.0] # To keep for part 3
 num_gpus = 5  # There are 5 GPUs
 
 def run_experiment(params):
     """Runs a single experiment."""
-    dataset, size, n_dim, n_classes, scheduler, lbeta, ubeta, n_step, lr, batch_size, guidance_scale, reward_scale, gpu_id = params
+    dataset, size, n_dim, n_classes, scheduler, lbeta, ubeta, n_step, lr, batch_size, guidance_scale, reward_scale = params
     results_file = f"results_{dataset}_cond.csv"
 
     # Open CSV in append mode
@@ -31,10 +31,10 @@ def run_experiment(params):
         if f.tell() == 0:
             writer.writerow(["Dataset", "Scheduler", "Lbeta", "Ubeta", "Steps", "LR", "Batch Size", "Guidance Scale", "NLL Score", "Accuracy"])
 
-        print(f"Running on GPU {gpu_id}: {dataset}, {scheduler}, beta: {lbeta} -- {ubeta}, T: {n_step}, LR: {lr}, Batch: {batch_size}, Guidance: {guidance_scale}")
+        print(f"Running on GPU: {dataset}, {scheduler}, beta: {lbeta} -- {ubeta}, T: {n_step}, LR: {lr}, Batch: {batch_size}, Guidance: {guidance_scale}")
 
         cmd_train = (
-            f"CUDA_VISIBLE_DEVICES={gpu_id} python ddpm.py --mode train --conditional 1 "
+            f"python ddpm.py --mode train --conditional 1 "
             f"--dataset {dataset} --n_classes {n_classes} --epochs 100 --n_dim {n_dim} --n_samples {size} "
             f"--scheduler {scheduler} --batch_size {batch_size} --n_steps {n_step} --reward_scale {reward_scale} "
             f"--lbeta {lbeta} --ubeta {ubeta} --lr {lr} --guidance_scale {guidance_scale} "
@@ -52,7 +52,7 @@ def run_experiment(params):
         accuracy = process.stdout.strip().split()[-1] if process.stdout else "N/A"
 
         # Write result to CSV
-        writer.writerow([dataset, scheduler, lbeta, ubeta, n_step, lr, batch_size, guidance_scale, reward_scale, nll_score, accuracy])
+        writer.writerow([dataset, scheduler, lbeta, ubeta, n_step, lr, batch_size, guidance_scale, nll_score, accuracy])
         f.flush()  # Ensure immediate write
 
 def main():
@@ -65,11 +65,10 @@ def main():
         itertools.product(
             schedulers, zip(lbetas, ubetas), n_steps, lrs, batch_sizes, zip(guidance_scales, reward_scales)
         ):
-            gpu_id = next(gpu_cycle)  # Assign GPU dynamically
-            all_params.append((dataset, size, n_dim, n_classes, scheduler, lbeta, ubeta, n_step, lr, batch_size, guidance_scale, reward_scale, gpu_id))
+            all_params.append((dataset, size, n_dim, n_classes, scheduler, lbeta, ubeta, n_step, lr, batch_size, guidance_scale, reward_scale))
 
     # Use Pool with `processes=None` to use all available CPU cores
-    with multiprocessing.Pool(processes=min(len(all_params), num_gpus * 4)) as pool:
+    with multiprocessing.Pool(processes=5) as pool:
         pool.map(run_experiment, all_params)
 
 if __name__ == "__main__":
