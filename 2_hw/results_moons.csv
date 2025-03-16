@@ -1,19 +1,4 @@
 Dataset,Scheduler,Lbeta,Ubeta,Steps,LR,Batch Size,NLL Score
-moons,linear,0.001,0.02,10,0.01,100,N/A
-moons,linear,0.001,0.02,50,0.01,100,N/A
-moons,linear,0.001,0.02,100,0.01,100,N/A
-moons,linear,0.001,0.02,150,0.01,100,N/A
-moons,linear,0.001,0.02,200,0.01,100,N/A
-moons,sigmoid,0.001,0.02,10,0.01,100,N/A
-moons,sigmoid,0.001,0.02,50,0.01,100,N/A
-moons,sigmoid,0.001,0.02,100,0.01,100,N/A
-moons,sigmoid,0.001,0.02,150,0.01,100,N/A
-moons,sigmoid,0.001,0.02,200,0.01,100,N/A
-moons,cosine,0.001,0.02,10,0.01,100,N/A
-moons,cosine,0.001,0.02,50,0.01,100,N/A
-moons,cosine,0.001,0.02,100,0.01,100,N/A
-moons,cosine,0.001,0.02,150,0.01,100,N/A
-moons,cosine,0.001,0.02,200,0.01,100,N/A
 moons,linear,0.001,0.02,10,0.01,100,1.0046790838241577
 moons,linear,0.001,0.02,50,0.01,100,0.9370331168174744
 moons,linear,0.001,0.02,100,0.01,100,0.9373664855957031

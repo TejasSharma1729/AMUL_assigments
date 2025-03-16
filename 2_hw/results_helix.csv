@@ -1,19 +1,4 @@
 Dataset,Scheduler,Lbeta,Ubeta,Steps,LR,Batch Size,NLL Score
-helix,linear,0.001,0.02,10,0.01,100,N/A
-helix,linear,0.001,0.02,50,0.01,100,N/A
-helix,linear,0.001,0.02,100,0.01,100,N/A
-helix,linear,0.001,0.02,150,0.01,100,N/A
-helix,linear,0.001,0.02,200,0.01,100,N/A
-helix,sigmoid,0.001,0.02,10,0.01,100,N/A
-helix,sigmoid,0.001,0.02,50,0.01,100,N/A
-helix,sigmoid,0.001,0.02,100,0.01,100,N/A
-helix,sigmoid,0.001,0.02,150,0.01,100,N/A
-helix,sigmoid,0.001,0.02,200,0.01,100,N/A
-helix,cosine,0.001,0.02,10,0.01,100,N/A
-helix,cosine,0.001,0.02,50,0.01,100,N/A
-helix,cosine,0.001,0.02,100,0.01,100,N/A
-helix,cosine,0.001,0.02,150,0.01,100,N/A
-helix,cosine,0.001,0.02,200,0.01,100,N/A
 helix,linear,0.001,0.02,10,0.01,100,1.5543076992034912
 helix,linear,0.001,0.02,50,0.01,100,1.5262000560760498
 helix,linear,0.001,0.02,100,0.01,100,1.5025678873062134

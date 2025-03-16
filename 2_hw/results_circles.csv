@@ -1,19 +1,4 @@
 Dataset,Scheduler,Lbeta,Ubeta,Steps,LR,Batch Size,NLL Score
-circles,linear,0.001,0.02,10,0.01,100,N/A
-circles,linear,0.001,0.02,50,0.01,100,N/A
-circles,linear,0.001,0.02,100,0.01,100,N/A
-circles,linear,0.001,0.02,150,0.01,100,N/A
-circles,linear,0.001,0.02,200,0.01,100,N/A
-circles,sigmoid,0.001,0.02,10,0.01,100,N/A
-circles,sigmoid,0.001,0.02,50,0.01,100,N/A
-circles,sigmoid,0.001,0.02,100,0.01,100,N/A
-circles,sigmoid,0.001,0.02,150,0.01,100,N/A
-circles,sigmoid,0.001,0.02,200,0.01,100,N/A
-circles,cosine,0.001,0.02,10,0.01,100,N/A
-circles,cosine,0.001,0.02,50,0.01,100,N/A
-circles,cosine,0.001,0.02,100,0.01,100,N/A
-circles,cosine,0.001,0.02,150,0.01,100,N/A
-circles,cosine,0.001,0.02,200,0.01,100,N/A
 circles,linear,0.001,0.02,10,0.01,100,1.0518138408660889
 circles,linear,0.001,0.02,50,0.01,100,1.001117467880249
 circles,linear,0.001,0.02,100,0.01,100,1.0122894048690796

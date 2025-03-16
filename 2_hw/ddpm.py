@@ -448,7 +448,7 @@ def sampleCFG(model, n_samples, noise_scheduler, guidance_scale, class_label):
             mu = (noise_scheduler.betas[t-1]) / (noise_scheduler.sqrt_one_minus_alphas_cumprod[t-1])
             y = torch.Tensor([class_label] * n_samples).to(x[t].device)
             y0 = torch.Tensor([model.n_classes] * n_samples).to(x[t].device)
-
+        
             eps_theta = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device), y)
             eps_theta0 = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device), y0)
             coeff_x = noise_scheduler.sqrt_recip_alphas[t-1]
@@ -488,6 +488,42 @@ def sampleSVDD(model, n_samples, noise_scheduler, reward_scale, reward_fn):
             x[t-1] = x[t] + reward_scale * rewards.unsqueeze(1) * eps_theta
 
     return x[0]
+
+def plot_samples(samples_classwise, real_samples_classwise, args, run_name):
+    colors = plt.get_cmap('tab10').colors
+    dim = samples_classwise[0].shape[1]  
+
+    fig = plt.figure(figsize=(10, 5))
+    ax = fig.add_subplot(111, projection='3d' if dim == 3 else None)
+
+    for c in range(args.n_classes):
+        if dim == 2:
+            ax.scatter(samples_classwise[c][:, 0].cpu(), samples_classwise[c][:, 1].cpu(),
+                       color=colors[c], label=f'Class {c}', s=10)
+        elif dim == 3:
+            ax.scatter(samples_classwise[c][:, 0].cpu(), samples_classwise[c][:, 1].cpu(), samples_classwise[c][:, 2].cpu(),
+                       color=colors[c], label=f'Class {c}', s=10)
+
+    ax.legend()
+    ax.set_title('Generated Samples')
+    plt.savefig(f'{run_name}/samples_{args.seed}_{args.n_samples}.png')
+    plt.clf()
+
+    fig = plt.figure(figsize=(10, 5))
+    ax = fig.add_subplot(111, projection='3d' if dim == 3 else None)
+
+    for c in range(args.n_classes):
+        if dim == 2:
+            ax.scatter(real_samples_classwise[c][:, 0].cpu(), real_samples_classwise[c][:, 1].cpu(),
+                       color=colors[c], label=f'Class {c}', s=10)
+        elif dim == 3:
+            ax.scatter(real_samples_classwise[c][:, 0].cpu(), real_samples_classwise[c][:, 1].cpu(), real_samples_classwise[c][:, 2].cpu(),
+                       color=colors[c], label=f'Class {c}', s=10)
+
+    ax.legend()
+    ax.set_title('Real Samples')
+    plt.savefig(f'{args.dataset}.png')
+    plt.clf()
     
 
 if __name__ == "__main__":
@@ -574,6 +610,8 @@ if  __name__ == "__main__" and args.conditional:
         plt.savefig(f'{args.dataset}.png')
         plt.clf()
         """
+        plot_samples(samples_classwise, real_samples_classwise, args, run_name)
+        
 
     elif args.mode == 'classify':
         model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))
