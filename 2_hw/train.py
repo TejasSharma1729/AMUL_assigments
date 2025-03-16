@@ -8,10 +8,10 @@ datasets = ['moons', 'blobs', 'circles', 'manycircles', 'helix']
 sizes = [8000, 8000, 8000, 8000, 10000]
 dimensions = [2, 2, 2, 2, 3]
 schedulers = ['linear', 'sigmoid', 'cosine']
-lbetas = [0.005]
-ubetas = [0.05]
+lbetas = [0.001]
+ubetas = [0.02]
 n_steps = [10, 50, 100, 150, 200]
-lrs = [0.05]
+lrs = [0.01]
 batch_sizes = [100]
 num_gpus = 5
 

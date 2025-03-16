@@ -141,10 +141,10 @@ class DDPM(nn.Module):
         angles = t[:, None] * freqs[None]
         # Architecture: we embed for frequencies 10000 ^ (i / d) for i in [0, d-1]
         # We changed it to self.n_steps ** (-exponents) for better performance
-        t_sin = torch.cat([torch.sin(angles), torch.cos(angles)], dim=-1)
+        t_sin = torch.cat([torch.sin(angles), torch.cos(angles)], dim = 1)
         t_embed = self.time_embed(t_sin)
 
-        x_and_t = torch.cat([x, t_embed], dim=-1)
+        x_and_t = torch.cat([x, t_embed], dim = 1)
         noise_out = self.model(x_and_t)
         return noise_out
 
@@ -207,11 +207,11 @@ class ConditionalDDPM(nn.Module):
         exponents = torch.arange(self.t_sin_dim, device=x.device).float() / self.t_sin_dim
         freqs = self.n_steps ** (-exponents)
         angles = t[:, None] * freqs[None]
-        t_sin = torch.cat([torch.sin(angles), torch.cos(angles)], dim=-1)
+        t_sin = torch.cat([torch.sin(angles), torch.cos(angles)], dim = 1)
         t_embed = self.time_embed(t_sin)
 
-        x_y_t = torch.cat([x, y_embed, t_embed], dim=-1)
-        # x_y_t = torch.cat([x, classes.float(), t_sin], dim=-1)
+        x_y_t = torch.cat([x, y_embed, t_embed], dim = 1)
+        # x_y_t = torch.cat([x, classes.float(), t_sin], dim = 1)
         noise_out = self.model(x_y_t)
         return noise_out
 
@@ -253,24 +253,24 @@ class ClassifierDDPM():
         # since during training (y, x_t, t) will not be seen together
         sum_diffs = torch.zeros(x.size(0), n_classes, device=device)
         # Idea: sample multiple (5) times and take the sum, so as to avoid random errors
+        with torch.no_grad():
+            for _ in range(10):
+                # The random timestamps will mostly be different for different samples
+                rand_times = torch.randint(0, self.noise_scheduler.num_timesteps, (x.size(0),), device=device)
+                noise = torch.randn_like(x)
+                coeff_x = self.noise_scheduler.sqrt_alphas_cumprod.to(device)[rand_times.unsqueeze(1)]
+                coeff_noise = self.noise_scheduler.sqrt_one_minus_alphas_cumprod.to(device)[rand_times.unsqueeze(1)]
+                x_t = coeff_x * x + coeff_noise * noise
 
-        for _ in range(5):
-            # The random timestamps will mostly be different for different samples
-            rand_times = torch.randint(0, self.noise_scheduler.num_timesteps // 2, (x.size(0),), device=device)
-            noise = torch.randn_like(x)
-            coeff_x = self.noise_scheduler.sqrt_alphas_cumprod.to(device)[rand_times.unsqueeze(1)]
-            coeff_noise = self.noise_scheduler.sqrt_one_minus_alphas_cumprod.to(device)[rand_times.unsqueeze(1)]
-            x_t = coeff_x * x + coeff_noise * noise
+                for c in range(n_classes):
+                    y = torch.Tensor([c] * x.size(0)).to(device)
+                    model_out = self.model(x_t, rand_times + 1, y)
+                    model_null_out = self.model(x_t, rand_times + 1, model.n_classes * torch.ones_like(y))
 
-            for c in range(n_classes):
-                y = torch.Tensor([c] * x.size(0)).to(device)
-                model_out = self.model(x_t, y, rand_times + 1)
-                model_null_out = self.model(x_t, model.n_classes * torch.ones_like(y), rand_times + 1)
-
-                # Now update sum of differences for this timestamp and this classification.
-                sum_diffs[c] += torch.norm(model_out - model_null_out, dim=1)
+                    # Now update sum of differences for this timestamp and this classification.
+                    sum_diffs[:, c] += torch.norm(model_out - model_null_out, dim = 1)
         
-        return F.softmax(sum_diffs, dim=1)
+        return F.softmax(sum_diffs, dim = 1)
         # Return: we need a function that converts these sums to probabilities, that sum to one
         # and are proportional somewhat to sums. One option: naive sum (less sharp prediction).
         # We picked softmax, since it is a good choice for classification problems.
@@ -305,7 +305,7 @@ def train(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
             loss.backward()
             optimizer.step()
             total_loss += loss
-        print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader)}")
+        # print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader)}")
     torch.save(model.state_dict(), os.path.join(run_name, "model.pth"))
 
 def trainConditional(model, noise_scheduler, dataloader, optimizer, epochs, run_name):
@@ -423,7 +423,6 @@ def sampleConditional(model, n_samples, noise_scheduler, class_label, return_int
         return x
     return x[0]
 
-@torch.no_grad()
 def sampleCFG(model, n_samples, noise_scheduler, guidance_scale, class_label):
     """
     Sample from the conditional model
@@ -441,20 +440,21 @@ def sampleCFG(model, n_samples, noise_scheduler, guidance_scale, class_label):
     model.eval()
     x = [torch.randn(n_samples, model.n_dim) for _ in range (0, model.n_steps + 1)]
 
-    for t in range(model.n_steps, 0, -1):
-        z = torch.randn(n_samples, model.n_dim).to(x[t].device)
-        mu = (noise_scheduler.betas[t-1]) / (noise_scheduler.sqrt_one_minus_alphas_cumprod[t-1])
-        y = torch.Tensor([class_label] * n_samples).to(x[t].device)
-        y0 = torch.Tensor([model.n_classes] * n_samples).to(x[t].device)
+    with torch.no_grad():
+        for t in range(model.n_steps, 0, -1):
+            z = torch.randn(n_samples, model.n_dim).to(x[t].device)
+            mu = (noise_scheduler.betas[t-1]) / (noise_scheduler.sqrt_one_minus_alphas_cumprod[t-1])
+            y = torch.Tensor([class_label] * n_samples).to(x[t].device)
+            y0 = torch.Tensor([model.n_classes] * n_samples).to(x[t].device)
 
-        eps_theta = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device), y)
-        eps_theta0 = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device), y0)
-        coeff_x = noise_scheduler.sqrt_recip_alphas[t-1]
-        coeff_noise = torch.sqrt(noise_scheduler.posterior_variance[t-1])
+            eps_theta = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device), y)
+            eps_theta0 = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device), y0)
+            coeff_x = noise_scheduler.sqrt_recip_alphas[t-1]
+            coeff_noise = torch.sqrt(noise_scheduler.posterior_variance[t-1])
 
-        cond_x = coeff_x * (x[t] - mu * eps_theta) + coeff_noise * z
-        cond_x0 = coeff_x * (x[t] - mu * eps_theta0) + coeff_noise * z
-        x[t-1] = (1 + guidance_scale) * cond_x - guidance_scale * cond_x0
+            cond_x = coeff_x * (x[t] - mu * eps_theta) + coeff_noise * z
+            cond_x0 = coeff_x * (x[t] - mu * eps_theta0) + coeff_noise * z
+            x[t-1] = (1 + guidance_scale) * cond_x - guidance_scale * cond_x0
 
     return x[0]
 
@@ -476,12 +476,13 @@ def sampleSVDD(model, n_samples, noise_scheduler, reward_scale, reward_fn):
     """
     model.eval()
     x = [torch.randn(n_samples, model.n_dim) for _ in range (0, model.n_steps + 1)]
-
-    for t in range(model.n_steps, 0, -1):
-        y = torch.Tensor([-1] * n_samples).to(x[t].device)
-        eps_theta = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device), y)
-        rewards = reward_fn(eps_theta)
-        x[t-1] = x[t] + reward_scale * rewards.unsqueeze(1) * eps_theta
+    
+    with torch.no_grad():
+        for t in range(model.n_steps, 0, -1):
+            y = torch.Tensor([-1] * n_samples).to(x[t].device)
+            eps_theta = model.forward(x[t], torch.Tensor([t] * n_samples).to(x[t].device), y)
+            rewards = reward_fn(eps_theta)
+            x[t-1] = x[t] + reward_scale * rewards.unsqueeze(1) * eps_theta
 
     return x[0]
     
@@ -490,18 +491,18 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--conditional', type=int, default=1)
-    parser.add_argument("--mode", choices=['train', 'sample', 'classify'], default='sample')
-    parser.add_argument("--n_steps", type=int, default=200)
-    parser.add_argument("--lbeta", type=float, default=0.002)
-    parser.add_argument("--ubeta", type=float, default=0.2)
-    parser.add_argument("--epochs", type=int, default=30)
-    parser.add_argument("--n_samples", type=int, default=32561)
+    parser.add_argument("--mode", choices=['train', 'sample', 'classify'], default='classify')
+    parser.add_argument("--n_steps", type=int, default=100)
+    parser.add_argument("--lbeta", type=float, default=0.001)
+    parser.add_argument("--ubeta", type=float, default=0.02)
+    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--n_samples", type=int, default=8000)
     parser.add_argument("--n_classes", type=int, default=2)
     parser.add_argument("--batch_size", type=int, default=100)
     parser.add_argument("--lr", type=float, default=0.01)
-    parser.add_argument("--dataset", type=str, default = 'albatross')
+    parser.add_argument("--dataset", type=str, default = 'moons')
     parser.add_argument("--seed", type=int, default = 42)
-    parser.add_argument("--n_dim", type=int, default = 64)
+    parser.add_argument("--n_dim", type=int, default = 2)
     parser.add_argument("--guidance_scale", type=float, default=0.5)
     parser.add_argument("--reward_scale", type=float, default=0.5)
     parser.add_argument("--scheduler", choices=['linear', 'sigmoid', 'cosine'], default = 'linear')
@@ -552,6 +553,7 @@ if  __name__ == "__main__" and args.conditional:
         nll_score = sum(nll_scores) / args.n_classes
         print(float(nll_score))
 
+        """
         plt.clf()
         colors = plt.get_cmap('tab10').colors
         for c in range (args.n_classes):
@@ -568,6 +570,7 @@ if  __name__ == "__main__" and args.conditional:
         plt.title('Real Samples')
         plt.savefig(f'{args.dataset}.png')
         plt.clf()
+        """
 
     elif args.mode == 'classify':
         model.load_state_dict(torch.load(f'{run_name}/model.pth', map_location=device, weights_only=False))

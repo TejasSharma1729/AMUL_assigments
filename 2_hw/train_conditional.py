@@ -8,14 +8,14 @@ datasets = ['moons', 'circles', 'manycircles', 'blobs', 'helix']
 sizes = [8000, 8000, 8000, 8000, 10000]
 dimensions = [2, 2, 2, 2, 3]
 num_classes = [2, 2, 8, 2, 2]
-schedulers = ['linear', 'sigmoid', 'cosine'] # To update
-lbetas = [0.005]
-ubetas = [0.05]
-n_steps = [10, 50, 100, 150, 200] # To update
-lrs = [0.05]
+schedulers = ['linear'] # To update
+lbetas = [0.001]
+ubetas = [0.02]
+n_steps = [100] # To update
+lrs = [0.01]
 batch_sizes = [100]
 guidance_scales = [0.2, 0,3, 0.5, 0.8, 1.0]
-reward_scales = [0.5] # To keep for part 3
+reward_scales = [0.2, 0.3, 0.5, 0.8, 1.0] # To keep for part 3
 num_gpus = 5  # There are 5 GPUs
 
 def run_experiment(params):
@@ -31,11 +31,11 @@ def run_experiment(params):
         if f.tell() == 0:
             writer.writerow(["Dataset", "Scheduler", "Lbeta", "Ubeta", "Steps", "LR", "Batch Size", "Guidance Scale", "NLL Score", "Accuracy"])
 
-        print(f"Running on GPU {gpu_id}: {dataset}, {scheduler}, beta: {lbeta} {ubeta}, T: {n_step}, LR: {lr}, Batch: {batch_size}")
+        print(f"Running on GPU {gpu_id}: {dataset}, {scheduler}, beta: {lbeta} -- {ubeta}, T: {n_step}, LR: {lr}, Batch: {batch_size}, Guidance: {guidance_scale}")
 
         cmd_train = (
-            f"CUDA_VISIBLE_DEVICES={gpu_id} python ddpm.py --mode train "
-            f"--dataset {dataset} --n_classes {n_classes} --epochs 30 --n_dim {n_dim} --n_samples {size} "
+            f"CUDA_VISIBLE_DEVICES={gpu_id} python ddpm.py --mode train --conditional 1 "
+            f"--dataset {dataset} --n_classes {n_classes} --epochs 100 --n_dim {n_dim} --n_samples {size} "
             f"--scheduler {scheduler} --batch_size {batch_size} --n_steps {n_step} --reward_scale {reward_scale} "
             f"--lbeta {lbeta} --ubeta {ubeta} --lr {lr} --guidance_scale {guidance_scale} "
         )
