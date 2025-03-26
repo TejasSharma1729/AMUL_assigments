@@ -26,46 +26,46 @@ conda install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1  pytorch-cuda
 
 1. **Greedy Decoding**: To run the code on a specific GPU, use the following command:
 ```bash
-CUDA_VISIBLE_DEVICES=0 python task0.py --hf-token "<your_hf_token>" --decoding-strategy "greedy"
+CUDA_VISIBLE_DEVICES=0 python task0.py --hf-token "${HFTOKEN}" --decoding-strategy "greedy"
 ```
 To run the code on CPU, use the following command (*please note that this will be extremely slow*):
 ```bash
-CUDA_VISIBLE_DEVICES=-1 python task0.py --hf-token "<your_hf_token>" --decoding-strategy "greedy"
+CUDA_VISIBLE_DEVICES=-1 python task0.py --hf-token "${HFTOKEN}" --decoding-strategy "greedy"
 ```
 Additionally, if you want to check the input, reference text and your predicted outputs, you can use:
 ```bash
-CUDA_VISIBLE_DEVICES=0 python task0.py --hf-token "<your_hf_token>" --decoding-strategy "greedy" --debug true
+CUDA_VISIBLE_DEVICES=0 python task0.py --hf-token "${HFTOKEN}" --decoding-strategy "greedy" --debug true
 ```
 
 2. **Random Sampling**: Follow the same steps as above, but with additional arguments
 ```bash
-CUDA_VISIBLE_DEVICES=0 python task0.py --hf-token "<your_hf_token>" --decoding-strategy "random" --tau <tau value>
+CUDA_VISIBLE_DEVICES=0 python task0.py --hf-token "${HFTOKEN}" --decoding-strategy "random" --tau <tau value>
 ```
 
 3. **Top-k Sampling**: Follow the same steps as above, but with additional arguments
 ```bash
-CUDA_VISIBLE_DEVICES=0 python task0.py --hf-token "<your_hf_token>" --decoding-strategy "topk" --k <k value>
+CUDA_VISIBLE_DEVICES=0 python task0.py --hf-token "${HFTOKEN}" --decoding-strategy "topk" --k <k value>
 ```
 
 4. **Nucleus Sampling**: Follow the same steps as above, but with additional arguments
 ```bash
-CUDA_VISIBLE_DEVICES=0 python task0.py --hf-token "<your_hf_token>" --decoding-strategy "nucleus" --p <p value>
+CUDA_VISIBLE_DEVICES=0 python task0.py --hf-token "${HFTOKEN}" --decoding-strategy "nucleus" --p <p value>
 ```
 
 #### Task 1
 Similar to the previous task, you can run the script as follows:
 ```bash
-CUDA_VISIBLE_DEVICES=0 python task1.py --hf-token "<your_hf_token>" --word_list <path to the word_lists.txt file>
+CUDA_VISIBLE_DEVICES=0 python task1.py --hf-token "${HFTOKEN}" --word_list <path to the word_lists.txt file>
 ```
 
 #### Task 2
 Similar to previous task, you can run the script as follows:
 1. **Single head decoding**
 ```bash 
-CUDA_VISIBLE_DEVICES=0 python task2.py --hf-token "<your_hf_token>" --decoding-strategy "single-head"
+CUDA_VISIBLE_DEVICES=0 python task2.py --hf-token "${HFTOKEN}" --decoding-strategy "single-head"
 ```
 
 2. **Multiple head decoding**
 ```bash
-CUDA_VISIBLE_DEVICES=0 python task2.py --hf-token "<your_hf_token>" --decoding-strategy "multi-head" --beam-width <beam width> --use-no-medusa-heads <no of medusa heads to be used>
+CUDA_VISIBLE_DEVICES=0 python task2.py --hf-token "${HFTOKEN}" --decoding-strategy "multi-head" --beam-width <beam width> --use-no-medusa-heads <no of medusa heads to be used>
 ```
