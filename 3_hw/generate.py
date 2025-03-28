@@ -149,21 +149,25 @@ class TextGenerator:
         generated_tokens = []
         for _ in range(self.max_output_len):
             outputs = self.model(input_ids)
-            logits = outputs.logits[:, -1, :]
-            topk_logits, topk_indices = torch.topk(logits, self.k, dim=-1)
-            topk_logits = topk_logits / self.tau  # Apply temperature scaling
-            probs = nn.functional.softmax(topk_logits, dim=-1)
+            logits = outputs.logits[:, -1, :]  # Get logits for last generated token
             
-            # Sample from the top-k distribution
-            sampled_indices = torch.multinomial(probs, num_samples=1).squeeze(-1)
-            next_token = topk_indices.gather(dim=-1, index=sampled_indices.unsqueeze(-1)).squeeze(-1)
-
+            probs = nn.functional.softmax(logits, dim=-1)
+            topk_probs, topk_indices = torch.topk(probs, self.k, dim=-1)  # Get top-k values & indices
+            
+            # Normalize only the top-k probabilities
+            topk_probs = topk_probs / topk_probs.sum(dim=-1, keepdim=True)
+            
+            # Sample from the restricted top-k probabilities
+            sampled_index = torch.multinomial(topk_probs.squeeze(0), num_samples=1)
+            next_token = topk_indices[0, sampled_index]  # Convert back to actual token ID
+            
             if next_token.item() == self.eos_token_id:
                 break
             generated_tokens.append(next_token.item())
-            input_ids = torch.cat([input_ids, next_token.unsqueeze(-1)], dim=-1)
+            input_ids = torch.cat([input_ids, next_token.unsqueeze(0)], dim=-1)  # Ensure 2D shape
         
         return torch.tensor(generated_tokens)
+        
         # END TODO
     
     
@@ -188,21 +192,43 @@ class TextGenerator:
         '''    
         # TODO:
         generated_tokens = []
+        
         for _ in range(self.max_output_len):
             outputs = self.model(input_ids)
-            logits = outputs.logits[:, -1, :]
-            logits = logits / self.tau  # Apply temperature scaling
-            sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-            cumulative_probs = torch.cumsum(nn.functional.softmax(sorted_logits, dim=-1), dim=-1)
-            nucleus_mask = cumulative_probs < self.p
-            nucleus_mask[..., 1:] = nucleus_mask[..., :-1].clone()
-            nucleus_mask[..., 0] = True
-            nucleus_probs = nn.functional.softmax(sorted_logits[nucleus_mask], dim=-1)
-            next_token = sorted_indices[nucleus_mask][torch.multinomial(nucleus_probs, num_samples=1)]
+            logits = outputs.logits[:, -1, :]  # Get logits for last generated token
+            
+            probs = nn.functional.softmax(logits, dim=-1)
+            
+            # Sort probabilities in descending order
+            sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+            
+            # Compute cumulative sum
+            cumsum_probs = torch.cumsum(sorted_probs, dim=-1)
+            
+            # Get the indices of tokens within the nucleus
+            nucleus_mask = cumsum_probs < self.p  # Boolean mask
+            
+            # Ensure we always include at least one token (the highest probability one)
+            nucleus_mask[..., 0] = True  
+            
+            # Apply mask
+            topk_probs = sorted_probs[nucleus_mask]
+            topk_indices = sorted_indices[nucleus_mask]
+            
+            # Normalize only the selected top-p probabilities
+            topk_probs = topk_probs / topk_probs.sum(dim=-1, keepdim=True)
+            
+            # Sample from the nucleus
+            sampled_index = torch.multinomial(topk_probs, num_samples=1)  # 1D tensor
+            
+            next_token = topk_indices[sampled_index]  # Correct indexing
+            
             if next_token.item() == self.eos_token_id:
                 break
+            
             generated_tokens.append(next_token.item())
-            input_ids = torch.cat([input_ids, next_token.unsqueeze(-1)], dim=-1)
+            input_ids = torch.cat([input_ids, next_token.unsqueeze(0)], dim=-1)
+        
         return torch.tensor(generated_tokens)
         # END TODO
     

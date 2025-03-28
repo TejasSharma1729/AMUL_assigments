@@ -55,7 +55,7 @@ CUDA_VISIBLE_DEVICES=0 python task0.py --hf-token "${HFTOKEN}" --decoding-strate
 #### Task 1
 Similar to the previous task, you can run the script as follows:
 ```bash
-CUDA_VISIBLE_DEVICES=0 python task1.py --hf-token "${HFTOKEN}" --word_list <path to the word_lists.txt file>
+CUDA_VISIBLE_DEVICES=0 python task1.py --hf-token "${HFTOKEN}" --word-list <path to the word_lists.txt file>
 ```
 
 #### Task 2
