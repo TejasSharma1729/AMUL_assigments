@@ -73,13 +73,22 @@ class MedusaTextGenerator:
                 tensor of shape (T,), where T <= self.max_output_len
         '''    
         # TODO:
+        """
+        past_key_values, past_key_values_data, current_length_data, = initialize_past_key_values(self.model.base_model)
+        self.model.past_key_values = past_key_values
+        self.model.past_key_values_data = past_key_values_data
+        self.model.current_length_data = current_length_data
+        """
+        
+        
         generated_tokens = []
 
         for _ in range(self.max_output_len):
-            outputs = self.model(input_ids)
-            logits = outputs.logits[:, -1, :]
+            outputs = self.model.base_model(input_ids=input_ids)
+            logits = outputs.logits[0, -1, :]
 
             next_token = torch.argmax(logits, dim=-1)
+            print(next_token, next_token.device)
 
             if next_token.item() == self.eos_token_id:
                 break
@@ -108,5 +117,35 @@ class MedusaTextGenerator:
                 tensor of shape (T,), where T <= self.max_output_len
         '''    
         # TODO:
-        raise NotImplementedError
+        past_key_values, past_key_values_data, current_length_data, = initialize_past_key_values(self.model.base_model)
+        self.model.past_key_values = past_key_values
+        self.model.past_key_values_data = past_key_values_data
+        self.model.current_length_data = current_length_data
+        current_ids = input_ids
+        medusa_logits, output, logits = self.model(
+            input_ids=current_ids,
+            past_key_values=self.model.past_key_values,
+            output_orig=True,
+            medusa_forward=True
+        )
+        candidates = [current_ids]
+        scores = [0.0]
+
+        for s in range(self.no_heads + 1):
+            log_probs = logits[s, -1, :]
+            new_candidates = []
+            new_scores = []
+            for c in range (1, len(candidates) + 1):
+                for y_hat in torch.topk(log_probs, self.beam_width).indices:
+                    new_score = scores[c] + log_probs[y_hat]
+                    new_candidate = candidates[c] + [y_hat]
+                    new_scores.append(new_score)
+                    new_candidates.append(new_candidate)
+                topk_scores = torch.topk(new_scores, self.beam_width).indices
+                candidates = [new_candidates[i] for i in topk_scores]
+            topk_scores = torch.topk(new_scores, self.beam_width).indices
+            candidates = [new_candidates[i] for i in topk_scores]
+        return torch.Tensor(candidates)
+        
+        
             

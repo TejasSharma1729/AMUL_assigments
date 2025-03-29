@@ -31,7 +31,7 @@ if __name__ == "__main__":
     
     set_seed()
     
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda")
     
     model = MedusaModel.from_pretrained(
         args.model_name,
@@ -79,6 +79,9 @@ if __name__ == "__main__":
             print('Ground Truth:', generated_texts[-1])
             print()
             print()
+        
+        if (i >= 5):
+            break
     
     bleu = evaluate.load('bleu')
     rouge = evaluate.load('rouge')
