@@ -46,7 +46,7 @@ class MedusaTextGenerator:
             self.generator_func = self.multi_head_decoding
         
     def __call__(
-        self, input_ids: Int[torch.Tensor, "batch in_seq_len"]
+        self, input_ids: Int[torch.Tensor, "batch in_seq_len"],
     ) -> Int[torch.Tensor, "batch out_seq_len"]:
         '''
             Do not edit.
@@ -73,7 +73,20 @@ class MedusaTextGenerator:
                 tensor of shape (T,), where T <= self.max_output_len
         '''    
         # TODO:
-        raise NotImplementedError
+        generated_tokens = []
+
+        for _ in range(self.max_output_len):
+            outputs = self.model(input_ids)
+            logits = outputs.logits[:, -1, :]
+
+            next_token = torch.argmax(logits, dim=-1)
+
+            if next_token.item() == self.eos_token_id:
+                break
+            generated_tokens.append(next_token.item())
+            input_ids = torch.cat([input_ids, next_token.unsqueeze(-1)], dim=-1)
+
+        return torch.tensor(generated_tokens)
 
     def multi_head_decoding(
         self,

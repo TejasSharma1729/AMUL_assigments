@@ -82,11 +82,15 @@ class TextGenerator:
         generated_tokens = []
         for _ in range(self.max_output_len):
             outputs = self.model(input_ids)
-            next_token = torch.argmax(outputs.logits[:, -1, :], dim=-1)
+            logits = outputs.logits[:, -1, :]
+
+            next_token = torch.argmax(logits, dim=-1)
+
             if next_token.item() == self.eos_token_id:
                 break
             generated_tokens.append(next_token.item())
             input_ids = torch.cat([input_ids, next_token.unsqueeze(-1)], dim=-1)
+
         return torch.tensor(generated_tokens)
         # END TODO
         
@@ -114,14 +118,18 @@ class TextGenerator:
         for _ in range(self.max_output_len):
             outputs = self.model(input_ids)
             logits = outputs.logits[:, -1, :]
+
             probs = nn.functional.softmax(logits, dim=-1)
             adjusted_probs = probs.pow(1 / self.tau)  # Apply temperature scaling correctly
             adjusted_probs = adjusted_probs / adjusted_probs.sum(dim=-1, keepdim=True)  # Normalize
+
             next_token = torch.multinomial(adjusted_probs, num_samples=1)  # Keep it 2D
+
             if next_token.item() == self.eos_token_id:
                 break
             generated_tokens.append(next_token.item())
             input_ids = torch.cat([input_ids, next_token], dim=-1)  # next_token is now 2D
+
         return torch.tensor(generated_tokens)
         # END TODO
     
