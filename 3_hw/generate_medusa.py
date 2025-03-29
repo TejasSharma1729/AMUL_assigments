@@ -93,7 +93,9 @@ class MedusaTextGenerator:
             if next_token.item() == self.eos_token_id:
                 break
             generated_tokens.append(next_token.item())
-            input_ids = torch.cat([input_ids, next_token.unsqueeze(-1)], dim=-1)
+            device = input_ids.device
+            next_tensor = next_token.unsqueeze(-1).unsqueeze(-1)
+            input_ids = torch.cat([input_ids, next_token.to(device)], dim=-1)
 
         return torch.tensor(generated_tokens)
 
@@ -117,35 +119,44 @@ class MedusaTextGenerator:
                 tensor of shape (T,), where T <= self.max_output_len
         '''    
         # TODO:
-        past_key_values, past_key_values_data, current_length_data, = initialize_past_key_values(self.model.base_model)
-        self.model.past_key_values = past_key_values
-        self.model.past_key_values_data = past_key_values_data
-        self.model.current_length_data = current_length_data
         current_ids = input_ids
         medusa_logits, output, logits = self.model(
             input_ids=current_ids,
-            past_key_values=self.model.past_key_values,
             output_orig=True,
             medusa_forward=True
         )
         candidates = [current_ids]
+        device = current_ids.device
         scores = [0.0]
 
-        for s in range(self.no_heads + 1):
-            log_probs = logits[s, -1, :]
+        for s in range(self.no_heads):
+            required_logits = None
+            if (s == 0):
+                required_logits = logits[0, -1, :]
+            else:
+                required_logits = medusa_logits[s - 1, 0,  -1, :]
+            log_probs = nn.functional.log_softmax(required_logits)
+
             new_candidates = []
             new_scores = []
-            for c in range (1, len(candidates) + 1):
+
+            for c in range (len(candidates)):
                 for y_hat in torch.topk(log_probs, self.beam_width).indices:
+
                     new_score = scores[c] + log_probs[y_hat]
-                    new_candidate = candidates[c] + [y_hat]
+                    next_token = torch.Tensor([y_hat]).unsqueeze(-1)
+                    new_candidate = torch.cat([candidates[c], next_token.to(device)], dim=-1)
+
                     new_scores.append(new_score)
                     new_candidates.append(new_candidate)
-                topk_scores = torch.topk(new_scores, self.beam_width).indices
-                candidates = [new_candidates[i] for i in topk_scores]
-            topk_scores = torch.topk(new_scores, self.beam_width).indices
+
+            topk_scores = torch.topk(torch.Tensor(new_scores), self.beam_width).indices
+            scores = [new_scores[i] for i in topk_scores]
             candidates = [new_candidates[i] for i in topk_scores]
-        return torch.Tensor(candidates)
+
+        index = torch.argmax(torch.Tensor(scores)).item()
+        required_candidate = candidates[index].reshape(input_ids.shape[1] + self.no_heads)
+        return required_candidate.int()[input_ids.shape[1]:]
         
         
             

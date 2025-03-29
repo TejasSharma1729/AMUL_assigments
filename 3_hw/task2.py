@@ -79,9 +79,8 @@ if __name__ == "__main__":
             print('Ground Truth:', generated_texts[-1])
             print()
             print()
+
         
-        if (i >= 5):
-            break
     
     bleu = evaluate.load('bleu')
     rouge = evaluate.load('rouge')
