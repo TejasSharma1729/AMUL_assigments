@@ -72,30 +72,21 @@ class MedusaTextGenerator:
             Returns:
                 tensor of shape (T,), where T <= self.max_output_len
         '''    
-        # TODO:
-        """
-        past_key_values, past_key_values_data, current_length_data, = initialize_past_key_values(self.model.base_model)
-        self.model.past_key_values = past_key_values
-        self.model.past_key_values_data = past_key_values_data
-        self.model.current_length_data = current_length_data
-        """
-        
         
         generated_tokens = []
+        device = input_ids.device
 
         for _ in range(self.max_output_len):
             outputs = self.model.base_model(input_ids=input_ids)
             logits = outputs.logits[0, -1, :]
 
             next_token = torch.argmax(logits, dim=-1)
-            print(next_token, next_token.device)
 
             if next_token.item() == self.eos_token_id:
                 break
             generated_tokens.append(next_token.item())
-            device = input_ids.device
-            next_tensor = next_token.unsqueeze(-1).unsqueeze(-1)
-            input_ids = torch.cat([input_ids, next_token.to(device)], dim=-1)
+            next_tensor = next_token.unsqueeze(-1).unsqueeze(-1).to(device)
+            input_ids = torch.cat([input_ids, next_tensor], dim=-1)
 
         return torch.tensor(generated_tokens)
 
@@ -118,45 +109,81 @@ class MedusaTextGenerator:
             Returns:
                 tensor of shape (T,), where T <= self.max_output_len
         '''    
-        # TODO:
+
         current_ids = input_ids
-        medusa_logits, output, logits = self.model(
-            input_ids=current_ids,
-            output_orig=True,
-            medusa_forward=True
-        )
-        candidates = [current_ids]
-        device = current_ids.device
-        scores = [0.0]
+        device = input_ids.device
+        num_tokens_generated = 0
+        assert (current_ids.dtype in (torch.int32, torch.int64))
 
-        for s in range(self.no_heads):
-            required_logits = None
-            if (s == 0):
-                required_logits = logits[0, -1, :]
-            else:
-                required_logits = medusa_logits[s - 1, 0,  -1, :]
-            log_probs = nn.functional.log_softmax(required_logits)
+        while (num_tokens_generated + self.no_heads <= self.max_output_len):
+            medusa_logits, output, logits = self.model(
+                input_ids=current_ids,
+                output_orig=True,
+                medusa_forward=True
+            )
 
-            new_candidates = []
-            new_scores = []
+            candidates = [current_ids]
+            eos_candidates = []
+            eos_scores = []
+            scores = [0.0]
 
-            for c in range (len(candidates)):
-                for y_hat in torch.topk(log_probs, self.beam_width).indices:
+            for s in range(self.no_heads):
+                required_logits = None
+                if (s == 0):
+                    required_logits = logits[0, -1, :]
+                else:
+                    required_logits = medusa_logits[s - 1, 0,  -1, :]
+                log_probs = nn.functional.log_softmax(required_logits)
 
-                    new_score = scores[c] + log_probs[y_hat]
-                    next_token = torch.Tensor([y_hat]).unsqueeze(-1)
-                    new_candidate = torch.cat([candidates[c], next_token.to(device)], dim=-1)
+                new_candidates = []
+                new_scores = []
 
-                    new_scores.append(new_score)
-                    new_candidates.append(new_candidate)
+                for c in range (len(candidates)):
+                    for y_hat in torch.topk(log_probs, 2 * self.beam_width).indices:
+                        # 2 * self.beam_width -- heuristic, for more sequences without EOS tokens
 
-            topk_scores = torch.topk(torch.Tensor(new_scores), self.beam_width).indices
-            scores = [new_scores[i] for i in topk_scores]
-            candidates = [new_candidates[i] for i in topk_scores]
+                        new_score = scores[c] + log_probs[y_hat]
+                        next_token = torch.Tensor([y_hat]).unsqueeze(-1).to(device)
+                        new_candidate = torch.cat([candidates[c], next_token], dim=-1)
 
-        index = torch.argmax(torch.Tensor(scores)).item()
-        required_candidate = candidates[index].reshape(input_ids.shape[1] + self.no_heads)
-        return required_candidate.int()[input_ids.shape[1]:]
+                        if (y_hat == self.eos_token_id):
+                            eos_scores.append(new_score * 5)
+                            # negative score * 5 -- penalized early terminating (EOS) sequences
+                            eos_candidates.append(new_candidate)
+                        else:
+                            new_scores.append(new_score)
+                            new_candidates.append(new_candidate)
+
+                k_val = min(self.beam_width, len(new_scores))
+                new_scores_tensor = torch.Tensor(new_scores)
+                topk_scores = torch.topk(new_scores_tensor, k_val).indices
+
+                scores = [new_scores[i] for i in topk_scores]
+                candidates = [new_candidates[i] for i in topk_scores]
+            
+            scores_tensor = torch.Tensor(scores)
+            index = torch.argmax(scores_tensor).item()
+            current_ids = candidates[index]
+
+            if (eos_candidates != [] and eos_scores != []):
+                eos_scores_tensor = torch.Tensor(eos_scores)
+                eos_index = torch.argmax(eos_scores_tensor).item()
+
+                if (eos_scores[eos_index] > scores[index]):
+                    current_ids = eos_candidates[eos_index]
+                    break
+            
+            num_tokens_generated += self.no_heads
+            current_ids = current_ids.int()
+            
+        
+        current_ids_integers = current_ids.int()
+        current_ids_linear = current_ids_integers.reshape(-1)
+        generated_tokens = current_ids_linear[input_ids.shape[1]:]
+
+        assert (len(generated_tokens.shape) == 1)
+        assert (generated_tokens.shape[0] <= self.max_output_len)
+        return generated_tokens
         
         
             
