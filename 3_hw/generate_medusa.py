@@ -112,11 +112,25 @@ class MedusaTextGenerator:
 
         current_ids = input_ids
         device = input_ids.device
-        num_tokens_generated = 0
-        assert (current_ids.dtype in (torch.int32, torch.int64))
+        num_tokens_generated = 5 
+        # Some single head tokens to provide a good start.
 
+        for _ in range(num_tokens_generated):
+            outputs = self.model.base_model(input_ids=input_ids)
+            logits = outputs.logits[0, -1, :]
+
+            next_token = torch.argmax(logits, dim=-1)
+
+            if next_token.item() == self.eos_token_id:
+                break
+
+            next_tensor = next_token.unsqueeze(-1).unsqueeze(-1).to(device)
+            current_ids = torch.cat([current_ids, next_tensor], dim=-1)
+        
+        
+        # The main thing: loop over medusa generation till max output size
         while (num_tokens_generated + self.no_heads <= self.max_output_len):
-            medusa_logits, output, logits = self.model(
+            medusa_logits, _, logits = self.model(
                 input_ids=current_ids,
                 output_orig=True,
                 medusa_forward=True
@@ -139,8 +153,8 @@ class MedusaTextGenerator:
                 new_scores = []
 
                 for c in range (len(candidates)):
-                    for y_hat in torch.topk(log_probs, 2 * self.beam_width).indices:
-                        # 2 * self.beam_width -- heuristic, for more sequences without EOS tokens
+                    for y_hat in torch.topk(log_probs, 3 * self.beam_width).indices:
+                        # 3 * self.beam_width -- heuristic, for more sequences without EOS tokens
 
                         new_score = scores[c] + log_probs[y_hat]
                         next_token = torch.Tensor([y_hat]).unsqueeze(-1).to(device)
@@ -150,7 +164,17 @@ class MedusaTextGenerator:
                             eos_scores.append(new_score * 5)
                             # negative score * 5 -- penalized early terminating (EOS) sequences
                             eos_candidates.append(new_candidate)
+                        
                         else:
+                            if (y_hat == candidates[c][0, -1]):
+                                # penalizing repeated tokens: negative score * 3
+                                new_score *= 3
+                            elif (y_hat == candidates[c][0, -2]):
+                                new_score *= 2
+                            elif (y_hat == candidates[c][0, -3]):
+                                new_score *= 2
+                            
+                            # With the above, we penalize repeated values
                             new_scores.append(new_score)
                             new_candidates.append(new_candidate)
 
@@ -181,8 +205,6 @@ class MedusaTextGenerator:
         current_ids_linear = current_ids_integers.reshape(-1)
         generated_tokens = current_ids_linear[input_ids.shape[1]:]
 
-        assert (len(generated_tokens.shape) == 1)
-        assert (generated_tokens.shape[0] <= self.max_output_len)
         return generated_tokens
         
         
