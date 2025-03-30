@@ -154,7 +154,7 @@ class MedusaTextGenerator:
 
                 for c in range (len(candidates)):
                     for y_hat in torch.topk(log_probs, 2 * self.beam_width).indices:
-                        # 3 * self.beam_width -- heuristic, for more sequences without EOS tokens
+                        # 2 * self.beam_width -- heuristic, for more sequences without EOS tokens
 
                         new_score = scores[c] + log_probs[y_hat]
                         next_token = torch.Tensor([y_hat]).unsqueeze(-1).to(device)
