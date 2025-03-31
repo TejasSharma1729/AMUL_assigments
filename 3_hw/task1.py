@@ -33,6 +33,8 @@ if __name__ == "__main__":
     tokenizer.pad_token = tokenizer.eos_token    
     model = AutoModelForCausalLM.from_pretrained(args.model_name, torch_dtype=torch.float16, token=args.hf_token).to(device)
     model.eval()
+    # print(f"eos token id = {tokenizer.eos_token_id}")
+    # print(f"eos token = {tokenizer.eos_token}")
     generator = ConstrainedTextGenerator(model=model, tokenizer=tokenizer, eos_id=tokenizer.eos_token_id, max_output_len=args.max_output_len)
     
     # Load dataset

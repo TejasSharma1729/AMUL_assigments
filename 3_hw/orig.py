@@ -72,86 +72,114 @@ class ConstrainedTextGenerator:
             Do not edit.
         '''
         self.model = model
-        self.tokenizer = tokenizer
-        self.eos_token_id = eos_id
+        
         self.max_output_len = max_output_len
-        self.alpha = 0.8  # Blending weight between model probability and constraints
+        self.eos_token_id = eos_id
+        
+        self.tokenizer = tokenizer
 
-    def __call__(self, input_ids, word_list):
-        tokenized_words = tokenize_words(self.tokenizer, word_list)
+    def __call__(
+        self, input_ids: Int[torch.Tensor, "batch in_seq_len"], word_list: list
+    ) -> Int[torch.Tensor, "batch out_seq_len"]:
+        '''
+            Implement Word-Constrained decoding technique. (refer assignment document for more details)
+            
+            `word_list`: contains bag of words for the particular example
+
+            - batch size is always 1; no need to handle generation of multiple sequences simultaneously.
+            - stop decoding when: 
+                - the end-of-sequence (EOS) token is generated `self.eos_token_id`
+                - the predefined maximum number of tokens is reached `self.max_output_len`
+            
+            Return an integer tensor containing only the generated tokens (excluding input tokens).
+            
+            Input:
+                input_ids: tensor of shape (1, P)
+            Returns:
+                tensor of shape (T,), where T <= self.max_output_len
+        '''    
+        
+        tokenized_words = []
+        for word in word_list:
+            tokens = self.tokenizer.encode(word, add_special_tokens=False)
+            if tokens:  
+                tokenized_words.append(tokens)
+        
         if not tokenized_words:
             return torch.tensor([], dtype=torch.long)
         
         trie = Trie()
-        all_words = set()
-        terminal_words = set()
         for tokens in tokenized_words:
             trie.insert(tokens)
-            all_words.add(tuple(tokens))
-            if tokens and tokens[-1] == self.tokenizer.encode(".", add_special_tokens=False)[-1]:
-                terminal_words.add(tuple(tokens))
         
-        words_used = set()
         generated_tokens = []
         current_sequence = []
         device = input_ids.device
-        prev_token = None
         
         for _ in range(self.max_output_len):
+            # Get model predictions
             with torch.no_grad():
                 outputs = self.model(input_ids)
             logits = outputs.logits[:, -1, :]
             
+            # Create mask for valid tokens
             mask = torch.full_like(logits, -float('inf'))
             
+            # Get valid next tokens based on current sequence
             if current_sequence:
+                # We're in the middle of forming a word - only allow tokens that continue valid words
                 valid_next = trie.get_valid_next_tokens(current_sequence)
                 mask[:, list(valid_next)] = logits[:, list(valid_next)]
             else:
+                # Need to start a new word - only allow tokens that start valid words
                 word_start_tokens = set(trie.root.children.keys())
-                unused_words = all_words - words_used
-                valid_starts = {tokens[0] for tokens in unused_words}
-                mask[:, list(valid_starts)] = logits[:, list(valid_starts)]
+                mask[:, list(word_start_tokens)] = logits[:, list(word_start_tokens)]
             
-            # Soft blending instead of hard masking
-            blended_logits = self.alpha * logits + (1 - self.alpha) * mask
-            blended_logits = torch.where(mask.isneginf(), mask, blended_logits)
-            
+            # Try multiple candidates if first choice is invalid
             next_token = None
-            for _ in range(5):
-                if blended_logits.isneginf().all():
+            for _ in range(5):  # Try top candidates
+                if mask.isneginf().all():  # No valid tokens left
                     break
-                candidate = torch.argmax(blended_logits, dim=-1).item()
-                if candidate == prev_token:
-                    blended_logits[0, candidate] = -float('inf')
-                    continue
+                
+                candidate = torch.argmax(mask, dim=-1).item()
+                
+                # Check if token is valid
                 test_sequence = current_sequence + [candidate]
                 if (current_sequence and candidate in trie.get_valid_next_tokens(current_sequence)) or (not current_sequence and candidate in trie.root.children):
                     next_token = candidate
                     break
                 else:
-                    blended_logits[0, candidate] = -float('inf')
+                    # Mask this invalid token and try next best option
+                    mask[0, candidate] = -float('inf')
             
             if next_token is None:
-                break
-            
+                break  # Couldn't find a valid token
+                
+            # Handle EOS token
             if next_token == self.eos_token_id:
-                if words_used == all_words and terminal_words.issubset(words_used):
+                # Verify current sequence is empty (not in middle of word)
+                if not current_sequence:
                     break
                 else:
-                    continue
-            
+                    continue  # Don't allow EOS in middle of word
+                
+            # Update state
             generated_tokens.append(next_token)
             current_sequence.append(next_token)
             input_ids = torch.cat([input_ids, torch.tensor([[next_token]], device=device)], dim=-1)
-            prev_token = next_token
             
+            # Check if current sequence completes a valid word
             if trie.is_valid_word(current_sequence):
-                words_used.add(tuple(current_sequence))
-                current_sequence = []
-        
+                current_sequence = []  # Reset for next word
+                
+        #print the word_bag:
         print(f"Word bag: {word_list}")
+        
+        # Print the generated sentence
+        generated_text = ""
         if generated_tokens:
-            print(f"Generated sentence: {self.tokenizer.decode(generated_tokens)}")
+            generated_text = self.tokenizer.decode(generated_tokens)
+            print(f"Generated sentence: {generated_text}")
         
         return torch.tensor(generated_tokens, device=device)
+        

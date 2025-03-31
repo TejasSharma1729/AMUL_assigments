@@ -75,27 +75,24 @@ class ConstrainedTextGenerator:
         self.tokenizer = tokenizer
         self.eos_token_id = eos_id
         self.max_output_len = max_output_len
-        self.alpha = 0.8  # Blending weight between model probability and constraints
+        self.words_used = set()
+        self.terminal_words = set()
+        self.all_words = set()
 
     def __call__(self, input_ids, word_list):
-        tokenized_words = tokenize_words(self.tokenizer, word_list)
-        if not tokenized_words:
+        self.tokenized_words = tokenize_words(self.tokenizer, word_list)
+        if not self.tokenized_words:
             return torch.tensor([], dtype=torch.long)
         
         trie = Trie()
-        all_words = set()
-        terminal_words = set()
-        for tokens in tokenized_words:
+        for tokens in self.tokenized_words:
             trie.insert(tokens)
-            all_words.add(tuple(tokens))
             if tokens and tokens[-1] == self.tokenizer.encode(".", add_special_tokens=False)[-1]:
-                terminal_words.add(tuple(tokens))
+                self.terminal_words.add(tuple(tokens))
         
-        words_used = set()
         generated_tokens = []
         current_sequence = []
         device = input_ids.device
-        prev_token = None
         
         for _ in range(self.max_output_len):
             with torch.no_grad():
@@ -104,39 +101,31 @@ class ConstrainedTextGenerator:
             
             mask = torch.full_like(logits, -float('inf'))
             
+            valid_words = [tuple(tokens) for tokens in self.tokenized_words if tuple(tokens) not in self.words_used]
             if current_sequence:
                 valid_next = trie.get_valid_next_tokens(current_sequence)
                 mask[:, list(valid_next)] = logits[:, list(valid_next)]
             else:
-                word_start_tokens = set(trie.root.children.keys())
-                unused_words = all_words - words_used
-                valid_starts = {tokens[0] for tokens in unused_words}
-                mask[:, list(valid_starts)] = logits[:, list(valid_starts)]
-            
-            # Soft blending instead of hard masking
-            blended_logits = self.alpha * logits + (1 - self.alpha) * mask
-            blended_logits = torch.where(mask.isneginf(), mask, blended_logits)
+                word_start_tokens = {tokens[0] for tokens in valid_words if tokens}
+                mask[:, list(word_start_tokens)] = logits[:, list(word_start_tokens)]
             
             next_token = None
             for _ in range(5):
-                if blended_logits.isneginf().all():
+                if mask.isneginf().all():
                     break
-                candidate = torch.argmax(blended_logits, dim=-1).item()
-                if candidate == prev_token:
-                    blended_logits[0, candidate] = -float('inf')
-                    continue
+                candidate = torch.argmax(mask, dim=-1).item()
                 test_sequence = current_sequence + [candidate]
                 if (current_sequence and candidate in trie.get_valid_next_tokens(current_sequence)) or (not current_sequence and candidate in trie.root.children):
                     next_token = candidate
                     break
                 else:
-                    blended_logits[0, candidate] = -float('inf')
+                    mask[0, candidate] = -float('inf')
             
             if next_token is None:
                 break
             
             if next_token == self.eos_token_id:
-                if words_used == all_words and terminal_words.issubset(words_used):
+                if self.words_used == set(tuple(tokens) for tokens in self.tokenized_words) and any(word in self.words_used for word in self.terminal_words):
                     break
                 else:
                     continue
@@ -144,10 +133,9 @@ class ConstrainedTextGenerator:
             generated_tokens.append(next_token)
             current_sequence.append(next_token)
             input_ids = torch.cat([input_ids, torch.tensor([[next_token]], device=device)], dim=-1)
-            prev_token = next_token
             
             if trie.is_valid_word(current_sequence):
-                words_used.add(tuple(current_sequence))
+                self.words_used.add(tuple(current_sequence))
                 current_sequence = []
         
         print(f"Word bag: {word_list}")
