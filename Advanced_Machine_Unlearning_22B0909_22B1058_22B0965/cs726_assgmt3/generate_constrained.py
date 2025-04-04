@@ -75,7 +75,6 @@ class ConstrainedTextGenerator:
         self.tokenizer = tokenizer
         self.eos_token_id = eos_id
         self.max_output_len = max_output_len
-        self.alpha = 0.8  # Blending weight between model probability and constraints
 
     def __call__(self, input_ids, word_list):
         tokenized_words = tokenize_words(self.tokenizer, word_list)
@@ -113,24 +112,20 @@ class ConstrainedTextGenerator:
                 valid_starts = {tokens[0] for tokens in unused_words}
                 mask[:, list(valid_starts)] = logits[:, list(valid_starts)]
             
-            # Soft blending instead of hard masking
-            blended_logits = self.alpha * logits + (1 - self.alpha) * mask
-            blended_logits = torch.where(mask.isneginf(), mask, blended_logits)
-            
             next_token = None
             for _ in range(5):
-                if blended_logits.isneginf().all():
+                if mask.isneginf().all():
                     break
-                candidate = torch.argmax(blended_logits, dim=-1).item()
+                candidate = torch.argmax(mask, dim=-1).item()
                 if candidate == prev_token:
-                    blended_logits[0, candidate] = -float('inf')
+                    mask[0, candidate] = -float('inf')
                     continue
                 test_sequence = current_sequence + [candidate]
                 if (current_sequence and candidate in trie.get_valid_next_tokens(current_sequence)) or (not current_sequence and candidate in trie.root.children):
                     next_token = candidate
                     break
                 else:
-                    blended_logits[0, candidate] = -float('inf')
+                    mask[0, candidate] = -float('inf')
             
             if next_token is None:
                 break
