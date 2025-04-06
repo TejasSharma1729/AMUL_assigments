@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 FEAT_DIM = 784 # Input dimension
 
 # Other settings
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 SEED = 42
 
 # Set random seed for reproducibility
@@ -110,14 +110,14 @@ if __name__ == "__main__":
     # DO NOT MAKE ANY CHANGES ABOVE THIS LINE
     # Write your code for TASK 0 below
     # TASK 0: Initialize Model and load weights
-    DATASET_PATH = '/PATH/TO/TEST/DATASET'  # Path to the dataset file
+    DATASET_PATH = './A4_test_data.pt'  # Path to the dataset file
+    MODEL_WEIGHTS_PATH = './trained_model_weights.pth'  # Path to the model weights file
     
-    model = 
+    model = EnergyRegressor(FEAT_DIM)  
+    # Initialize the model
+
+    model.load_state_dict(torch.load(MODEL_WEIGHTS_PATH, map_location=DEVICE))  
     # Load the model weights
-    
-    
-    
-    
     
     ##################################################################
     # DO NOT CHANGE ANYTHING BELOW THIS LINE
