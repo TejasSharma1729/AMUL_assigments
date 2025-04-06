@@ -3,47 +3,94 @@ import matplotlib.pyplot as plt
 
 def branin_hoo(x):
     """Calculate the Branin-Hoo function value for given input."""
-    
+    x1, x2 = x
+    a = 1
+    term1 = x2 - (5.1 / (4 * np.pi**2)) * x1**2 + (5 / np.pi) * x1 - 6
+    term2 = 10 * (1 - (1 / (8 * np.pi))) * np.cos(x1)
+    return a * term1**2 + term2 + 10
+
 
 # Kernel Functions (Students implement)
 def rbf_kernel(x1, x2, length_scale=1.0, sigma_f=1.0):
     """Compute the RBF kernel."""
-    pass
+    sqdist = np.sum((x1[:, None] - x2[None, :])**2, axis=2)
+    return sigma_f**2 * np.exp(-0.5 / length_scale**2 * sqdist)
 
 def matern_kernel(x1, x2, length_scale=1.0, sigma_f=1.0, nu=1.5):
     """Compute the Matérn kernel (nu=1.5)."""
-    pass
+    dists = np.linalg.norm(x1[:, None] - x2[None, :], axis=2)
+    sqrt3_d = np.sqrt(3) * dists / length_scale
+    return sigma_f**2 * (1 + sqrt3_d) * np.exp(-sqrt3_d)
 
 def rational_quadratic_kernel(x1, x2, length_scale=1.0, sigma_f=1.0, alpha=1.0):
     """Compute the Rational Quadratic kernel."""
-    pass
+    sqdist = np.sum((x1[:, None] - x2[None, :])**2, axis=2)
+    return sigma_f**2 * (1 + sqdist / (2 * alpha * length_scale**2))**(-alpha)
 
 def log_marginal_likelihood(x_train, y_train, kernel_func, length_scale, sigma_f, noise=1e-4):
     """Compute the log-marginal likelihood."""
-    pass
+    K = kernel_func(x_train, x_train, length_scale, sigma_f) + noise * np.eye(len(x_train))
+    L = np.linalg.cholesky(K)
+    alpha = np.linalg.solve(L.T, np.linalg.solve(L, y_train))
+    return -0.5 * y_train.T @ alpha - np.sum(np.log(np.diag(L))) - 0.5 * len(x_train) * np.log(2 * np.pi)
 
 def optimize_hyperparameters(x_train, y_train, kernel_func, noise=1e-4):
     """Optimize hyperparameters using grid search."""
-    pass
+    best_lml = -np.inf
+    best_params = (1.0, 1.0, noise)
+    for length_scale in [0.1, 0.5, 1.0, 2.0]:
+        for sigma_f in [0.5, 1.0, 2.0]:
+            lml = log_marginal_likelihood(x_train, y_train, kernel_func, length_scale, sigma_f, noise)
+            if lml > best_lml:
+                best_lml = lml
+                best_params = (length_scale, sigma_f, noise)
+    return best_params
 
 def gaussian_process_predict(x_train, y_train, x_test, kernel_func, length_scale=1.0, sigma_f=1.0, noise=1e-4):
     """Perform GP prediction."""
-    pass
+    x_train = np.atleast_2d(x_train)
+    x_test = np.atleast_2d(x_test)
+    
+    K = kernel_func(x_train, x_train, length_scale, sigma_f) + noise * np.eye(len(x_train))
+    K_s = kernel_func(x_train, x_test, length_scale, sigma_f)
+    K_ss = kernel_func(x_test, x_test, length_scale, sigma_f) + 1e-8 * np.eye(len(x_test))
+
+    K_inv = np.linalg.inv(K)
+
+    mu = K_s.T @ K_inv @ y_train
+    cov = K_ss - K_s.T @ K_inv @ K_s
+    std = np.sqrt(np.diag(cov))
+
+    return mu, std
 
 # Acquisition Functions (Simplified, no erf)
 def expected_improvement(mu, sigma, y_best, xi=0.01):
     """Compute Expected Improvement acquisition function."""
     # Approximate Phi(z) = 1 / (1 + exp(-1.702 * z))
-    pass
+    z = (mu - y_best - xi) / (sigma + 1e-8)
+    Phi = 1 / (1 + np.exp(-1.702 * z))
+    phi = np.exp(-0.5 * z**2) / np.sqrt(2 * np.pi)
+    return (mu - y_best - xi) * Phi + sigma * phi
 
 def probability_of_improvement(mu, sigma, y_best, xi=0.01):
     """Compute Probability of Improvement acquisition function."""
     # Approximate Phi(z) = 1 / (1 + exp(-1.702 * z))
-    pass
+    z = (mu - y_best - xi) / (sigma + 1e-8)
+    Phi = 1 / (1 + np.exp(-1.702 * z))
+    return Phi
 
 def plot_graph(x1_grid, x2_grid, z_values, x_train, title, filename):
     """Create and save a contour plot."""
-    
+    plt.figure(figsize=(8, 6))
+    cp = plt.contourf(x1_grid, x2_grid, z_values, levels=50, cmap='viridis')
+    plt.colorbar(cp)
+    plt.scatter(x_train[:, 0], x_train[:, 1], c='red', marker='x', label='Training Points')
+    plt.title(title)
+    plt.xlabel('x1')
+    plt.ylabel('x2')
+    plt.legend()
+    plt.savefig(filename)
+    plt.close()
 
 def main():
     """Main function to run GP with kernels, sample sizes, and acquisition functions."""
@@ -84,7 +131,22 @@ def main():
                 
                 if acq_func is not None:
                     # Hint: Find y_best, apply acq_func, select new point, update training set, recompute GP
-                    pass
+                    y_best = np.min(y_train_current)
+
+                    acq_values = acq_func(y_mean, y_std, y_best)
+
+                    best_acq_idx = np.argmax(acq_values)
+                    new_x = x_test[best_acq_idx]
+                    new_y = branin_hoo(new_x)
+
+                    x_train_current = np.vstack([x_train_current, new_x])
+                    y_train_current = np.append(y_train_current, new_y)
+                    
+                    length_scale, sigma_f, noise = optimize_hyperparameters(x_train_current, y_train_current, kernel_func)
+                    y_mean, y_std = gaussian_process_predict(x_train_current, y_train_current, x_test,
+                                                            kernel_func, length_scale, sigma_f, noise)
+                    y_mean_grid = y_mean.reshape(x1_grid.shape)
+                    y_std_grid = y_std.reshape(x1_grid.shape)
                 
                 acq_label = '' if acq_name == 'None' else f', Acq={acq_name}'
                 plot_graph(x1_grid, x2_grid, true_values, x_train_current,
