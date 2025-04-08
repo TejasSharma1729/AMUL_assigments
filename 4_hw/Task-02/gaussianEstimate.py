@@ -103,7 +103,8 @@ def main():
     }
     acquisition_strategies = {
         'EI': expected_improvement,
-        'PI': probability_of_improvement
+        'PI': probability_of_improvement,
+        'Random' : None
     }
     
     x1_test = np.linspace(-5, 10, 100)
@@ -129,15 +130,20 @@ def main():
                 y_mean_grid = y_mean.reshape(x1_grid.shape)
                 y_std_grid = y_std.reshape(x1_grid.shape)
                 
-                if acq_func is not None:
-                    # Hint: Find y_best, apply acq_func, select new point, update training set, recompute GP
-                    y_best = np.min(y_train_current)
-
-                    acq_values = acq_func(y_mean, y_std, y_best)
-
-                    best_acq_idx = np.argmax(acq_values)
-                    new_x = x_test[best_acq_idx]
+                if acq_name is not None:
+                    # Randomly pick the next point
+                    random_idx = np.random.choice(len(x_test))
+                    new_x = x_test[random_idx]
                     new_y = branin_hoo(new_x)
+                    if acq_name != 'Random':
+                        # Hint: Find y_best, apply acq_func, select new point, update training set, recompute GP
+                        y_best = np.min(y_train_current)
+
+                        acq_values = acq_func(y_mean, y_std, y_best)
+
+                        best_acq_idx = np.argmax(acq_values)
+                        new_x = x_test[best_acq_idx]
+                        new_y = branin_hoo(new_x)
 
                     x_train_current = np.vstack([x_train_current, new_x])
                     y_train_current = np.append(y_train_current, new_y)
