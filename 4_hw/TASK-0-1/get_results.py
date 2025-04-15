@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 # --- Configuration ---
 FEAT_DIM = 784 # Input dimension
 
-# Other settings
+# Other settings. Device -- MPS for MacBooks [CHANGE MADE HERE]
 DEVICE = torch.device("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 SEED = 42
 

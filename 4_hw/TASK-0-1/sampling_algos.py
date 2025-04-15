@@ -11,7 +11,7 @@ from sklearn.manifold import TSNE
 
 ##########################################################
 
-# Other settings
+# Other settings. Device -- MPS for MacBooks [CHANGE MADE HERE]
 DEVICE = torch.device("mps" if torch.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 SEED = 42
 
