@@ -13,7 +13,7 @@ decoding_strategies = [
 
 output_file = "out.txt"
 
-token = "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"
+token = "ENTER_YOUR_HF_TOKEN_HERE"
 
 with open(output_file, "w") as f:
     f.write("Decoding Experiments Output:\n\n")
